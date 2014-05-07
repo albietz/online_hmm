@@ -8,13 +8,6 @@ import sys
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
 
-def logsumexp(a, axis=None):
-    a_max = np.max(a, axis=axis)
-    try:
-        return a_max + np.log(np.sum(np.exp(a - a_max), axis=axis))
-    except:
-        return a_max + np.log(np.sum(np.exp(a - a_max[:,nax]), axis=axis))
-
 def alpha_beta(X, pi, A, obs_distr):
     '''A[i,j] = p(z_{t+1} = j | z_t = i)'''
     T = X.shape[0]
@@ -29,12 +22,12 @@ def alpha_beta(X, pi, A, obs_distr):
     lalpha[0,:] = np.log(pi) + lemissions[0,:]
     for t in range(1,T):
         a = lalpha[t-1:t,:].T + lA + lemissions[t,:]
-        lalpha[t,:] = logsumexp(a, axis=0)
+        lalpha[t,:] = np.logaddexp.reduce(a, axis=0)
 
     lbeta[T-1,:] = np.zeros(K)
     for t in reversed(range(T-1)):
         b = lbeta[t+1,:] + lA + lemissions[t+1,:]
-        lbeta[t,:] = logsumexp(b, axis=1)
+        lbeta[t,:] = np.logaddexp.reduce(b, axis=1)
 
     return lalpha, lbeta
 
@@ -67,7 +60,7 @@ def viterbi(X, pi, A, obs_distr):
 def smoothing(lalpha, lbeta):
     '''Computes all the p(q_t | u_1, ..., u_T)'''
     log_p = lalpha + lbeta
-    return log_p - logsumexp(log_p, axis=1)[:,nax]
+    return log_p - np.logaddexp.reduce(log_p, axis=1)[:,nax]
 
 def pairwise_smoothing(X, lalpha, lbeta, A, obs_distr):
     '''returns log_p[t,i,j] = log p(q_t = i, q_{t+1} = j|u)'''
@@ -82,7 +75,7 @@ def pairwise_smoothing(X, lalpha, lbeta, A, obs_distr):
         log_p[t,:,:] = lalpha[t:t+1,:].T + lA + lemissions[t+1,:] + lbeta[t+1,:]
 
     log_p2 = log_p.reshape(T, K*K)
-    log_p = np.reshape(log_p2 - logsumexp(log_p2, axis=1)[:,nax],
+    log_p = np.reshape(log_p2 - np.logaddexp.reduce(log_p2, axis=1)[:,nax],
                        (T,K,K))
 
     return log_p
@@ -90,7 +83,7 @@ def pairwise_smoothing(X, lalpha, lbeta, A, obs_distr):
 def log_likelihood(lalpha, lbeta):
     '''p(u_1, ..., u_T) = \sum_i alpha_T(i) beta_T(i)'''
     T = lalpha.shape[0]
-    return logsumexp(lalpha[T-1,:] + lbeta[T-1,:])
+    return np.logaddexp.reduce(lalpha[T-1,:] + lbeta[T-1,:])
 
 def em_hmm(X, pi, init_obs_distr, n_iter=10, Xtest=None):
     pi = pi.copy()
