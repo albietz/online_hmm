@@ -12,20 +12,23 @@ from numpy import newaxis as nax
 from scipy.io import loadmat
 
 def plot_segmentation(X, assignments):
-    gs = gridspec.GridSpec(4, 4)
-    plt.subplot(gs[0,:])
-    x,y = np.meshgrid(np.arange(len(assignments)),(0,1))
+    gs = gridspec.GridSpec(2 + len(assignments), 4)
+    for i, (title, ass) in enumerate(assignments):
+        plt.subplot(gs[i,:])
+        x,y = np.meshgrid(np.arange(len(ass)),(0,1))
 
-    c = assignments[nax,:].astype(np.float) / np.max(assignments)
+        c = ass[nax,:].astype(np.float) / np.max(ass)
 
-    plt.pcolor(x,y,c,vmin=0,vmax=1)
-    plt.ylim(0,1)
-    plt.xlim(0, len(assignments))
-    plt.yticks([])
-    # plt.bar(np.arange(len(assignments)), assignments+1, width=1.)
+        plt.pcolor(x,y,c,vmin=0,vmax=1)
+        plt.ylim(0,1)
+        plt.xlim(0, len(ass))
+        plt.yticks([])
+        plt.title(title)
+        # plt.bar(np.arange(len(ass)), ass+1, width=1.)
 
-    plt.subplot(gs[1:,:])
+    plt.subplot(gs[-2:,:])
     plt.imshow(np.log(X.T), aspect='auto')
+    plt.title('Spectrogram')
 
 if __name__ == '__main__':
     # if not sys.argv[1:]:
@@ -39,44 +42,45 @@ if __name__ == '__main__':
     # number of clusters
     K = 10
 
+    ass_plots = []
+
     # K-means
     assignments, centroids, dists = \
             kmeans.kmeans_best_of_n(X, K, n_trials=4, dist_cls=distributions.KL)
 
-    fig = plt.figure(1)
-    plot_segmentation(X, assignments)
-    fig.suptitle('K-means')
+    ass_plots.append(('K-means', assignments))
 
     # EM
     iterations = 10
     tau, obs_distr, pi, em_ll_train, _ = em.em(X, centroids, n_iter=iterations)
 
-    fig = plt.figure(2)
-    plot_segmentation(X, np.argmax(tau, axis=1))
-    fig.suptitle('EM')
-    
-    # HMM
-    tau, A, obs_distr, pi, ll_train, _ = hmm.em_hmm(X, pi, obs_distr)
+    ass_plots.append(('EM', np.argmax(tau, axis=1)))
 
-    fig = plt.figure(3)
-    plot_segmentation(X, np.argmax(tau, axis=1))
-    fig.suptitle('HMM smoothing')
+    # initialize with K-means
+    # init_pi = np.ones(K) / K
+    # init_obs_distr = centroids
+
+    # initialize with EM
+    init_pi = pi
+    init_obs_distr = obs_distr
+
+    # HMM
+    tau, A, obs_distr, pi, ll_train, _ = hmm.em_hmm(X, init_pi, init_obs_distr)
+
+    ass_plots.append(('HMM smoothing', np.argmax(tau, axis=1)))
 
     seq = hmm.viterbi(X, pi, A, obs_distr)
-    fig = plt.figure(4)
-    plot_segmentation(X, np.array(seq))
-    fig.suptitle('HMM viterbi')
+    ass_plots.append(('HMM viterbi', np.array(seq)))
 
     # HSMM
     dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
     tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
-            hsmm.em_hsmm(X, pi, obs_distr, dur_distr)
+            hsmm.em_hsmm(X, init_pi, init_obs_distr, dur_distr)
 
-    fig = plt.figure(5)
-    plot_segmentation(X, np.argmax(tau, axis=1))
-    fig.suptitle('HSMM smoothing')
+    ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
 
     seq = hsmm.viterbi(X, pi, A, obs_distr, dur_distr)
-    fig = plt.figure(6)
-    plot_segmentation(X, np.array(seq))
-    fig.suptitle('HSMM viterbi')
+    ass_plots.append(('HSMM viterbi', np.array(seq)))
+
+    plt.figure()
+    plot_segmentation(X, ass_plots)
