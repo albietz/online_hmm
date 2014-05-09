@@ -34,6 +34,9 @@ def alpha_beta(X, pi, A, obs_distr):
 def viterbi(X, pi, A, obs_distr):
     T = X.shape[0]
     K = pi.shape[0]
+
+    # gamma_t(j) = max_{q_1, ..., q_{t-1}} p(q_1, ..., q_{t-1}, q_t=j, u_1, ..., u_t)
+    # lgamma[t,j] = log gamma_t(j)
     lgamma = np.zeros((T,K))
     back = np.zeros((T,K))  # back-pointers
     lA = np.log(A)
@@ -111,7 +114,7 @@ def em_hmm(X, pi, init_obs_distr, n_iter=10, Xtest=None):
         pi = tau[0,:] / np.sum(tau[0,:])
 
         A = np.sum(tau_pairs, axis=0)
-        A = A / np.sum(A, axis=1)
+        A = A / A.sum(axis=1)[:,nax]
 
         for j in range(K):
             obs_distr[j].max_likelihood(X, tau[:,j])

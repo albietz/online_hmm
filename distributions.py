@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
+from scipy import stats
 
 class Distribution(object):
     def log_pdf(self, X):
@@ -111,3 +112,29 @@ class KL(Distribution):
     def pdf(self, X, normalized=True):
         return np.exp(X.dot(np.log(self.mean)))
 
+class DurationDistribution(Distribution):
+    def __init__(self, D):
+        self.D = D
+
+    def log_pmf(self, X):
+        pass
+
+    def log_vec(self):
+        return self.log_pmf(np.arange(1,self.D+1))
+
+class PoissonDuration(DurationDistribution):
+    def __init__(self, lmbda, D):
+        super(PoissonDuration, self).__init__(D)
+        self.lmbda = lmbda
+
+    def log_pmf(self, X):
+        return stats.poisson.logpmf(X, self.lmbda)
+
+class NegativeBinomial(DurationDistribution):
+    def __init__(self, r, p, D):
+        super(NegativeBinomial, self).__init__(D)
+        self.r = r
+        self.p = p
+
+    def log_pmf(self, X):
+        return stats.nbinom.logpmf(X, self.r, self.p)

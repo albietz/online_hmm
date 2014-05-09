@@ -2,6 +2,7 @@ import distributions
 import em
 import kmeans
 import hmm
+import hsmm
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -63,5 +64,19 @@ if __name__ == '__main__':
 
     seq = hmm.viterbi(X, pi, A, obs_distr)
     fig = plt.figure(4)
-    plot_segmentation(X, np.argmax(tau, axis=1))
+    plot_segmentation(X, np.array(seq))
     fig.suptitle('HMM viterbi')
+
+    # HSMM
+    dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+    tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
+            hsmm.em_hsmm(X, pi, obs_distr, dur_distr)
+
+    fig = plt.figure(5)
+    plot_segmentation(X, np.argmax(tau, axis=1))
+    fig.suptitle('HSMM smoothing')
+
+    seq = hsmm.viterbi(X, pi, A, obs_distr, dur_distr)
+    fig = plt.figure(6)
+    plot_segmentation(X, np.array(seq))
+    fig.suptitle('HSMM viterbi')
