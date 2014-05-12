@@ -8,8 +8,6 @@ import sys
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
 
-from IPython.core.debugger import Tracer
-
 def alpha_beta(X, pi, A, obs_distr, dur_distr):
     '''A[i,j] = p(z_{t+1} = j | z_t = i)'''
     T = X.shape[0]

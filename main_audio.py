@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import sys
+import time
 
 from numpy import newaxis as nax
 from scipy.io import loadmat
@@ -31,11 +32,13 @@ def plot_segmentation(X, assignments):
     plt.title('Spectrogram')
 
 if __name__ == '__main__':
-    # if not sys.argv[1:]:
-    #     print 'please specify the .mat file with the STFT data'
-    #     sys.exit(0)
+    if not sys.argv[1:]:
+        print 'no SFTF file provided, using ravel-fft.mat'
+        filename = 'ravel-fft.mat'
+    else:
+        filename = sys.argv[1]
 
-    X = loadmat('ravel-fft.mat')['X'].T
+    X = loadmat(filename)['X'].T
     X0 = X / np.sum(X,axis=1)[:,nax]
     X = 5 * X0
 
@@ -45,14 +48,18 @@ if __name__ == '__main__':
     ass_plots = []
 
     # K-means
+    t = time.time()
     assignments, centroids, dists = \
             kmeans.kmeans_best_of_n(X, K, n_trials=4, dist_cls=distributions.KL)
+    print 'K-means: {}s'.format(time.time() - t)
 
     ass_plots.append(('K-means', assignments))
 
     # EM
     iterations = 10
+    t = time.time()
     tau, obs_distr, pi, em_ll_train, _ = em.em(X, centroids, n_iter=iterations)
+    print 'EM: {}s'.format(time.time() - t)
 
     ass_plots.append(('EM', np.argmax(tau, axis=1)))
 
@@ -65,7 +72,9 @@ if __name__ == '__main__':
     init_obs_distr = obs_distr
 
     # HMM
+    t = time.time()
     tau, A, obs_distr, pi, ll_train, _ = hmm.em_hmm(X, init_pi, init_obs_distr)
+    print 'HMM EM: {}s'.format(time.time() - t)
 
     ass_plots.append(('HMM smoothing', np.argmax(tau, axis=1)))
 
@@ -74,8 +83,10 @@ if __name__ == '__main__':
 
     # HSMM
     dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+    t = time.time()
     tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
             hsmm.em_hsmm(X, init_pi, init_obs_distr, dur_distr)
+    print 'HSMM EM: {}s'.format(time.time() - t)
 
     ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
 
