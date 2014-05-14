@@ -78,8 +78,13 @@ if __name__ == '__main__':
 
     ass_plots.append(('HMM smoothing', np.argmax(tau, axis=1)))
 
-    seq = hmm.viterbi(X, pi, A, obs_distr)
+    seq, _ = hmm.viterbi(X, pi, A, obs_distr)
     ass_plots.append(('HMM viterbi', np.array(seq)))
+
+    t = time.time()
+    seq, obs_distr, energies = hmm.map_em_hmm(X, init_obs_distr)
+    print 'HMM MAP-EM: {}s'.format(time.time() - t)
+    ass_plots.append(('HMM MAP-EM', np.array(seq)))
 
     # HSMM
     dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
@@ -90,8 +95,13 @@ if __name__ == '__main__':
 
     ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
 
-    seq = hsmm.viterbi(X, pi, A, obs_distr, dur_distr)
+    seq, _ = hsmm.viterbi(X, pi, A, obs_distr, dur_distr)
     ass_plots.append(('HSMM viterbi', np.array(seq)))
+
+    t = time.time()
+    seq, obs_distr, dur_distr, energies = hsmm.map_em_hsmm(X, init_obs_distr, dur_distr)
+    print 'HSMM MAP-EM: {}s'.format(time.time() - t)
+    ass_plots.append(('HSMM MAP-EM', np.array(seq)))
 
     plt.figure()
     plot_segmentation(X, ass_plots)

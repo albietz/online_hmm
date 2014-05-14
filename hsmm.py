@@ -55,14 +55,17 @@ def alpha_beta(X, pi, A, obs_distr, dur_distr):
 
     return lalpha, lalphastar, lbeta, lbetastar
 
-def viterbi(X, pi, A, obs_distr, dur_distr):
+def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
     T = X.shape[0]
     K = pi.shape[0]
 
     lA = np.log(A)
     lemissions = np.zeros((T,K))
     for k in range(K):
-        lemissions[:,k] = obs_distr[k].log_pdf(X)
+        if use_distance:
+            lemissions[:,k] = - obs_distr[k].distances(X)
+        else:
+            lemissions[:,k] = obs_distr[k].log_pdf(X)
 
     # lD[d,i] = log p(d|i)
     lD = np.hstack(d.log_vec()[:,nax] for d in dur_distr)
@@ -104,7 +107,7 @@ def viterbi(X, pi, A, obs_distr, dur_distr):
         t = t - d - 1
         d = int(back[t,i])
 
-    return list(reversed(seq))
+    return np.array(list(reversed(seq))), lgamma
 
 def smoothing(lalpha, lalphastar, lbeta, lbetastar):
     '''Computes all the p(q_t | u_1, ..., u_T)'''
@@ -181,6 +184,28 @@ def em_hsmm(X, pi, init_obs_distr, dur_distr, n_iter=10, Xtest=None, fit_duratio
 
     return tau, A, obs_distr, dur_distr, pi, ll_train, ll_test
 
+def map_em_hsmm(X, init_obs_distr, dur_distr, n_iter=10):
+    obs_distr = copy.deepcopy(init_obs_distr)
+    T = X.shape[0]
+    K = len(obs_distr)
+
+    pi = np.ones(K)
+    A = 1. / K * np.ones((K,K))
+
+    energies = []
+    for it in range(n_iter):
+        # E-step
+        seq, lgamma = viterbi(X, pi, A, obs_distr, dur_distr, use_distance=True)
+        energy = np.max(lgamma[T-1])
+        energies.append(energy)
+
+        # M-step
+        for k in range(K):
+            if np.sum(seq == k) > 0:
+                obs_distr[k].max_likelihood(X, seq == k)
+
+    return seq, obs_distr, dur_distr, energies
+
 if __name__ == '__main__':
     X = np.loadtxt('EMGaussian.data')
     Xtest = np.loadtxt('EMGaussian.test')
@@ -228,11 +253,11 @@ if __name__ == '__main__':
     print '{:<14} {:>14.3f} {:>14.3f}'.format('HMM', ll_train[-1], ll_test[-1])
 
     # Viterbi
-    seq = viterbi(X, pi, A, obs_distr)
+    seq, _ = viterbi(X, pi, A, obs_distr)
     plt.figure()
     plt.scatter(X[:,0], X[:,1], c=seq)
     plt.title('most likely sequence, training')
-    seq_test = viterbi(Xtest, pi, A, obs_distr)
+    seq_test, _ = viterbi(Xtest, pi, A, obs_distr)
     plt.figure()
     plt.scatter(Xtest[:,0], Xtest[:,1], c=seq_test)
     plt.title('most likely sequence, test')
