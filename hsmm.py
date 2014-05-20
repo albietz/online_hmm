@@ -184,13 +184,14 @@ def em_hsmm(X, pi, init_obs_distr, dur_distr, n_iter=10, Xtest=None, fit_duratio
 
     return tau, A, obs_distr, dur_distr, pi, ll_train, ll_test
 
-def map_em_hsmm(X, init_obs_distr, dur_distr, n_iter=10):
+def map_em_hsmm(X, init_obs_distr, dur_distr, A=None, n_iter=10):
     obs_distr = copy.deepcopy(init_obs_distr)
     T = X.shape[0]
     K = len(obs_distr)
 
     pi = np.ones(K)
-    A = 1. / K * np.ones((K,K))
+    if A is None:
+        A = 1. / K * np.ones((K,K))
 
     energies = []
     for it in range(n_iter):
