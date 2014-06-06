@@ -105,12 +105,21 @@ class KL(Distribution):
         else:
             self.mean = np.sum(weights[:,nax] * X, axis=0) / np.sum(weights)
 
+    def online_update(self, x, step):
+        self.mean = (1 - step) * self.mean + step * x
+
     def log_pdf(self, X):
         # log p(x|theta) = sum_j x_j log(theta_j)
         return X.dot(np.log(self.mean))
 
     def pdf(self, X, normalized=True):
         return np.exp(X.dot(np.log(self.mean)))
+
+    def new_sufficient_statistics(self, x, cluster_id, K):
+        return KLSufficientStatistics(x, cluster_id, K, self.mean.shape[0])
+
+    def online_max_likelihood(self, rho_obs, phi):
+        self.mean = rho_obs.rho.dot(phi) / rho_obs.rho0.dot(phi)
 
 class DurationDistribution(Distribution):
     def __init__(self, D):
@@ -138,3 +147,28 @@ class NegativeBinomial(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.nbinom.logpmf(X, self.r, self.p)
+
+# Sufficient Statistics classes
+
+class SufficientStatistics(object):
+    def __init__(self, cluster_id, K):
+        self.cluster_id = cluster_id
+        self.K = K
+
+    def online_update(self, x, r, step):
+        pass
+
+class KLSufficientStatistics(SufficientStatistics):
+    def __init__(self, x, cluster_id, K, size):
+        super(KLSufficientStatistics, self).__init__(cluster_id, K)
+        # 1{Z_t = i}
+        self.rho0 = np.zeros(self.K)
+        # 1{Z_t = i} x_t
+        self.rho = np.zeros((size, self.K))
+        self.rho[:,self.cluster_id] = x
+
+    def online_update(self, x, r, step):
+        self.rho0 = (1 - step) * self.rho0.dot(r)
+        self.rho0[self.cluster_id] += step
+        self.rho = (1 - step) * self.rho.dot(r)
+        self.rho[:,self.cluster_id] += step * x

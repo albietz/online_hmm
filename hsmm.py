@@ -207,6 +207,51 @@ def map_em_hsmm(X, init_obs_distr, dur_distr, A=None, n_iter=10):
 
     return seq, obs_distr, dur_distr, energies
 
+def online_opt_hsmm(X, lambda1, lambda2, lcost, init_obs_distr=None, dist_cls=distributions.SquareDistance):
+    if init_obs_distr is None:
+        obs_distr = [dist_cls(X[0])]
+    else:
+        obs_distr = copy.deepcopy(init_obs_distr)
+    T = X.shape[0]
+    seq = -np.ones(T)
+
+    costs = np.array([d.distances(X[0]) for d in obs_distr])
+    best = np.argmin(costs)
+    seq[0] = best
+    counts = collections.defaultdict(int)
+    counts[best] = 1
+
+    cost = lcost[1]
+    curr_seg_length = 1
+
+    for t in range(1, T):
+        costs = np.array([d.distances(X[t]) for d in obs_distr])
+        if curr_seg_length + 1 < len(lcost):
+            costs[seq[t-1]] += lambda1 * (lcost[curr_seg_length + 1] - lcost[curr_seg_length])
+        # 1 == cost of transition
+        costs[np.arange(len(obs_distr)) != seq[t-1]] += lambda1 * (1 + lcost[1])
+
+        best = np.argmin(costs)
+
+        if best == seq[t-1]:
+            curr_seg_length += 1
+        else:
+            curr_seg_length = 1
+
+        if costs[best] < lambda1 * (1 + lcost[1]) + lambda2:
+            seq[t] = best
+            counts[best] += 1
+            obs_distr[best].online_update(X[t], 1. / counts[best])
+            cost += costs[best]
+        else:
+            best = len(obs_distr)
+            seq[t] = best
+            counts[best] = 1
+            obs_distr.append(dist_cls(X[t]))
+            cost += lambda1 * (1 + lcost[1]) + lambda2
+
+    return seq, obs_distr, cost
+
 if __name__ == '__main__':
     X = np.loadtxt('EMGaussian.data')
     Xtest = np.loadtxt('EMGaussian.test')
