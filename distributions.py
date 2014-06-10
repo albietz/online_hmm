@@ -21,6 +21,10 @@ class Gaussian(Distribution):
         self.mean = mean
         self.cov = cov
 
+    @property
+    def dim(self):
+        return len(self.mean)
+
     def distances(self, X):
         diff = X - self.mean
         return 0.5 * np.diag(diff.dot(inv(self.cov)).dot(diff.T))
@@ -45,6 +49,9 @@ class Gaussian(Distribution):
         else:
             return np.exp(-0.5 * np.diag(diff.dot(inv(self.cov)).dot(diff.T)))
 
+    def sample(self, size=1):
+        return np.random.multivariate_normal(self.mean, self.cov, size)
+
 
 # for euclidian K-means or isotropic Gaussian
 class SquareDistance(Distribution):
@@ -55,6 +62,10 @@ class SquareDistance(Distribution):
     @property
     def cov(self):
         return self.sigma2 * np.eye(2)
+
+    @property
+    def dim(self):
+        return len(self.mean)
 
     def distances(self, X):
         diff = X - self.mean
@@ -95,6 +106,10 @@ class KL(Distribution):
     '''Basically a multinomial.'''
     def __init__(self, mean):
         self.mean = mean
+
+    @property
+    def dim(self):
+        return len(self.mean)
 
     def distances(self, X):
         return - X.dot(np.log(self.mean))
@@ -139,6 +154,9 @@ class PoissonDuration(DurationDistribution):
     def log_pmf(self, X):
         return stats.poisson.logpmf(X, self.lmbda)
 
+    def sample(self, size=None):
+        return stats.poisson.rvs(self.lmbda, size=size)
+
 class NegativeBinomial(DurationDistribution):
     def __init__(self, r, p, D):
         super(NegativeBinomial, self).__init__(D)
@@ -147,6 +165,9 @@ class NegativeBinomial(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.nbinom.logpmf(X, self.r, self.p)
+
+    def sample(self, size=None):
+        return stats.nbinom.rvs(self.r, self.p, size=size)
 
 # Sufficient Statistics classes
 
