@@ -211,7 +211,7 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
     seq = np.zeros(T)
     tau = np.zeros((T, K))
 
-    emissions = np.array([d.pdf(X[0]) for d in obs_distr])
+    emissions = np.array([d.pdf(X[0]) for d in obs_distr]).flatten()
     phi = pi * emissions
     phi /= phi.sum()
     tau[0] = phi
@@ -226,7 +226,7 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
         r = phi[:,nax] * A
         r /= r.sum(0)
 
-        emissions = np.array([d.pdf(X[t]) for d in obs_distr])
+        emissions = np.array([d.pdf(X[t]) for d in obs_distr]).flatten()
         phi = emissions * A.T.dot(phi)
         phi /= phi.sum()
         tau[t] = phi
