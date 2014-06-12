@@ -277,7 +277,7 @@ class GaussianSufficientStatisticsHSMM(SufficientStatisticsHSMM):
         rho2 = np.zeros(self.rho2.shape)
         rho2[:,:,:,0] = (1 - step) * np.tensordot(self.rho2, r)
         rho2[:,:,:,1:] = (1 - step) * self.rho2[:,:,:,:-1]
-        rho2[:,:,self.cluster_id,:] += step * (x[:,nax] * x)[:,nax]
+        rho2[:,:,self.cluster_id,:] += step * (x[:,nax] * x)[:,:,nax]
         self.rho2 = rho2
 
     def get_statistics(self, phi):
@@ -322,9 +322,9 @@ class TransitionSufficientStatisticsHSMM(SufficientStatistics):
         # r(i|j,1) = sum_d r(i,d|j,1)
         r_marginal = r.sum(1)
         rho_pairs = np.zeros(self.rho_pairs.shape)
-        rho_pairs[:,:,:,0] = (1 - s) * np.tensordot(self.rho_pairs, r) + \
-                s * np.eye(self.K)[nax,:,:] * r_marginal[:,:,nax]
-        rho_pairs[:,:,:,1:] = (1 - s) * self.rho_pairs[:,:,:,:-1]
+        rho_pairs[:,:,:,0] = (1 - step) * np.tensordot(self.rho_pairs, r) + \
+                step * np.eye(self.K)[nax,:,:] * r_marginal[:,:,nax]
+        rho_pairs[:,:,:,1:] = (1 - step) * self.rho_pairs[:,:,:,:-1]
         self.rho_pairs = rho_pairs
 
     def get_statistics(self, phi):

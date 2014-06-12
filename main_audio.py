@@ -44,6 +44,7 @@ class algos:
     online_opt_hmm = 7
     online_opt_hsmm = 8
     online_em_hmm = 9
+    online_em_hsmm = 10
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
@@ -188,6 +189,15 @@ if __name__ == '__main__':
             print 'HMM online EM: {}s'.format(time.time() - t)
 
             ass_plots.append(('HMM online EM', seq))
+
+        elif alg == algos.online_em_hsmm:
+            step = lambda t: 1. / (t ** 0.6)
+            dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            t = time.time()
+            seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, dur_distr, t_min=100, step=step)
+            print 'HSMM online EM: {}s'.format(time.time() - t)
+
+            ass_plots.append(('HSMM online EM', seq))
 
     plt.figure()
     plot_segmentation(X, ass_plots)

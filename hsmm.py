@@ -252,84 +252,71 @@ def online_opt_hsmm(X, lambda1, lambda2, lcost, init_obs_distr=None, dist_cls=di
 
     return seq, obs_distr, cost
 
-if __name__ == '__main__':
-    X = np.loadtxt('EMGaussian.data')
-    Xtest = np.loadtxt('EMGaussian.test')
-    K = 4
+def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=None):
+    pi = init_pi.copy()
+    obs_distr = copy.deepcopy(init_obs_distr)
+    dur_distr = copy.deepcopy(init_dur_distr)
+    D = dur_distr[0].D
 
-    # Run simple EM (no HMM)
-    iterations = 40
-    assignments, centers, _ = kmeans.kmeans_best_of_n(X, K, n_trials=5)
-    new_centers = [distributions.Gaussian(c.mean, np.eye(2)) \
-                for c in centers]
-    tau, obs_distr, pi, gmm_ll_train, gmm_ll_test = \
-            em.em(X, new_centers, assignments, n_iter=iterations, Xtest=Xtest)
+    if step is None:
+        step = lambda t: 1. / t
 
-    # example with fixed parameters
-    A = 1. / 6 * np.ones((K,K))
-    A[np.diag(np.ones(K)) == 1] = 0.5
+    T = X.shape[0]
+    K = len(obs_distr)
 
-    lalpha, lbeta = alpha_beta(Xtest, pi, A, obs_distr)
-    log_p = smoothing(lalpha, lbeta)
-    p = np.exp(log_p)
+    A = 1. / K * np.ones((K,K))
+    seq = np.zeros(T)
+    phi = np.zeros((K, D))
+    # tau = np.zeros((T, K))
 
-    def plot_traj(p):
-        plt.figure()
-        ind = np.arange(100)
+    emissions = np.array([d.pdf(X[0]) for d in obs_distr]).flatten()
+    phi[:,0] = pi * emissions
+    phi[:,0] /= phi[:,0].sum()
+
+    rho_A = distributions.TransitionSufficientStatisticsHSMM(K,D)
+    rho_obs = [d.new_sufficient_statistics_hsmm(X[0], i, K, D)
+                    for i, d in enumerate(obs_distr)]
+    # rho_dur = [d.new_sufficient_statistics(i, K) for i, d in enumerate(obs_distr)]
+
+    for t in range(1,T):
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        # d_frac[i,d] = D_i(d+1)/D_i(d)
+        d_frac = np.vstack(d.d_frac() for d in dur_distr)
+
+        # r[i,d,j] = r(i,d|j,1)
+        r = (1 - d_frac)[:,:,nax] * phi[:,:,nax] * A[:,nax,:]
+        Z = r.sum((0,1))
+        r /= Z[nax,nax,:]
+
+        emissions = np.array([d.pdf(X[t]) for d in obs_distr]).flatten()
+
+        phi_new = np.zeros(phi.shape)
+        phi_new[:,0] = Z
+        phi_new[:,1:] = phi[:,:-1] * d_frac[:,:-1]
+        phi = phi_new * emissions[:,nax]
+        phi /= phi.sum()
+
+        tau = phi.sum(1)
+        seq[t] = np.argmax(tau)
+
+        # SA E-step
+        s = step(t)
+
+        rho_A.online_update(r, s)
         for k in range(K):
-            plt.subplot(K,1,k+1)
-            plt.bar(ind, p[:100,k])
+            rho_obs[k].online_update(X[t], r, s)
+            # rho_dur[k].online_update(r, s)
 
-    plot_traj(p)
+        # M-step
+        if t < t_min:
+            continue
+        # Tracer()()
+        A = rho_A.get_statistics(phi)
+        A /= A.sum(axis=1)[:,nax]
 
-    # EM for the HMM
-    tau, A, obs_distr, pi, ll_train, ll_test = \
-            em_hmm(X, pi, obs_distr, Xtest=Xtest)
-
-    plt.figure()
-    plt.plot(ll_train, label='training')
-    plt.plot(ll_test, label='test')
-    plt.xlabel('iterations')
-    plt.ylabel('log-likelihood')
-    plt.legend()
-
-    # print all log-likelihoods
-    print '{:<14} {:>14} {:>14}'.format('', 'train', 'test')
-    print '{:<14} {:>14.3f} {:>14.3f}'.format('General GMM', gmm_ll_train[-1], gmm_ll_test[-1])
-    print '{:<14} {:>14.3f} {:>14.3f}'.format('HMM', ll_train[-1], ll_test[-1])
-
-    # Viterbi
-    seq, _ = viterbi(X, pi, A, obs_distr)
-    plt.figure()
-    plt.scatter(X[:,0], X[:,1], c=seq)
-    plt.title('most likely sequence, training')
-    seq_test, _ = viterbi(Xtest, pi, A, obs_distr)
-    plt.figure()
-    plt.scatter(Xtest[:,0], Xtest[:,1], c=seq_test)
-    plt.title('most likely sequence, test')
-
-    # marginals in each state
-    lalpha, lbeta = alpha_beta(Xtest, pi, A, obs_distr)
-    log_p = smoothing(lalpha, lbeta)
-    plot_traj(np.exp(log_p))
-
-    def plot_traj(p):
-        plt.figure()
-        ind = np.arange(100)
         for k in range(K):
-            plt.subplot(K,1,k+1)
-            plt.bar(ind, p[:100,k])
+            obs_distr[k].online_max_likelihood(rho_obs[k], phi)
+            # dur_distr[k].online_max_likelihood(rho_dur[k], phi)
 
-    # most likely state according to marginals vs viterbi
-    plt.figure()
-    ind = np.arange(100)
-    c = ['b', 'g', 'r', 'y']
-    plt.subplot(211)
-    for k in range(K):
-        plt.bar(ind, k == np.argmax(log_p[:100], axis=1), color=c[k])
-    plt.title('marginals')
-
-    plt.subplot(212)
-    for k in range(K):
-        plt.bar(ind, k == np.array(seq_test[:100]), color=c[k])
-    plt.title('marginals')
+    return seq, A, obs_distr, dur_distr
