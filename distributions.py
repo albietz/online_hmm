@@ -264,29 +264,29 @@ class GaussianSufficientStatisticsHSMM(SufficientStatisticsHSMM):
     def online_update(self, x, r, step):
         rho0 = np.zeros(self.rho0.shape)
         rho0[:,0] = (1 - step) * np.tensordot(self.rho0, r)
-        rho0[self.cluster_id,0] += step
         rho0[:,1:] = (1 - step) * self.rho0[:,:-1]
+        rho0[self.cluster_id,:] += step
         self.rho0 = rho0
 
         rho1 = np.zeros(self.rho1.shape)
         rho1[:,:,0] = (1 - step) * np.tensordot(self.rho1, r)
-        rho1[:,self.cluster_id,0] += step * x[:,nax]
         rho1[:,:,1:] = (1 - step) * self.rho1[:,:,:-1]
+        rho1[:,self.cluster_id,:] += step * x[:,nax]
         self.rho1 = rho1
 
         rho2 = np.zeros(self.rho2.shape)
         rho2[:,:,:,0] = (1 - step) * np.tensordot(self.rho2, r)
-        rho2[:,:,self.cluster_id,0] += step * (x[:,nax] * x)[:,nax]
         rho2[:,:,:,1:] = (1 - step) * self.rho2[:,:,:,:-1]
+        rho2[:,:,self.cluster_id,:] += step * (x[:,nax] * x)[:,nax]
         self.rho2 = rho2
 
     def get_statistics(self, phi):
-        return np.tensordot(self.rho0, phi), np.tensordot(self.rho1, phi),
+        return np.tensordot(self.rho0, phi), np.tensordot(self.rho1, phi), \
             np.tensordot(self.rho2, phi)
 
 class KLSufficientStatisticsHSMM(SufficientStatisticsHSMM):
-    def __init__(self, x, cluster_id, K, size):
-        super(KLSufficientStatisticsHSMM, self).__init__(cluster_id, K)
+    def __init__(self, x, cluster_id, K, D, size):
+        super(KLSufficientStatisticsHSMM, self).__init__(cluster_id, K, D)
         # 1{Z_t = i}
         self.rho0 = np.zeros((self.K, self.D))
         self.rho0[self.cluster_id] = 1.
@@ -297,15 +297,35 @@ class KLSufficientStatisticsHSMM(SufficientStatisticsHSMM):
     def online_update(self, x, r, step):
         rho0 = np.zeros(self.rho0.shape)
         rho0[:,0] = (1 - step) * np.tensordot(self.rho0, r)
-        rho0[self.cluster_id,0] += step
         rho0[:,1:] = (1 - step) * self.rho0[:,:-1]
+        rho0[self.cluster_id,:] += step
         self.rho0 = rho0
 
         rho1 = np.zeros(self.rho1.shape)
         rho1[:,:,0] = (1 - step) * np.tensordot(self.rho1, r)
-        rho1[:,self.cluster_id,0] += step * x[:,nax]
         rho1[:,:,1:] = (1 - step) * self.rho1[:,:,:-1]
+        rho1[:,self.cluster_id,:] += step * x[:,nax]
         self.rho1 = rho1
 
     def get_statistics(self, phi):
         return np.tensordot(self.rho0, phi), np.tensordot(self.rho1, phi)
+
+class TransitionSufficientStatisticsHSMM(SufficientStatistics):
+    def __init__(self, K, D):
+        self.K = K
+        self.D = D
+        # 1{Z_{t-1} = i, Z_t = j, Z_t^D = 1}
+        # rho[i, j, k, d]
+        self.rho_pairs = np.zeros((K,K,K,D))
+
+    def online_update(self, r, step):
+        # r(i|j,1) = sum_d r(i,d|j,1)
+        r_marginal = r.sum(1)
+        rho_pairs = np.zeros(self.rho_pairs.shape)
+        rho_pairs[:,:,:,0] = (1 - s) * np.tensordot(self.rho_pairs, r) + \
+                s * np.eye(self.K)[nax,:,:] * r_marginal[:,:,nax]
+        rho_pairs[:,:,:,1:] = (1 - s) * self.rho_pairs[:,:,:,:-1]
+        self.rho_pairs = rho_pairs
+
+    def get_statistics(self, phi):
+        return np.tensordot(self.rho_pairs, phi)

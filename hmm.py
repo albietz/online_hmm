@@ -219,7 +219,7 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
 
     # rho[i, j, k]
     rho_pairs = np.zeros((K,K,K))
-    rho_obs = [d.new_sufficient_statistics(X[0], i, K) for i, d in enumerate(obs_distr)]
+    rho_obs = [d.new_sufficient_statistics_hmm(X[0], i, K) for i, d in enumerate(obs_distr)]
 
     for t in range(1,T):
         # r[i,j] = p(Z_{t-1} = i | Z_t = j, x_{1:t-1})
