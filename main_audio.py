@@ -149,8 +149,8 @@ if __name__ == '__main__':
             ass_plots.append(('HMM MAP-EM', np.array(seq)))
 
         elif alg == algos.hsmm:
-            # dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
-            dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
+            dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
                     hsmm.em_hsmm(X, init_pi, init_obs_distr, dur_distr)
