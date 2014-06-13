@@ -230,13 +230,13 @@ class KLSufficientStatisticsHMM(SufficientStatisticsHMM):
         self.rho0 = np.zeros(self.K)
         self.rho0[self.cluster_id] = 1.
         # 1{Z_t = i} x_t
-        self.rho = np.zeros((size, self.K))
-        self.rho[:,self.cluster_id] = x
+        self.rho1 = np.zeros((size, self.K))
+        self.rho1[:,self.cluster_id] = x
 
     def online_update(self, x, r, step):
         self.rho0 = (1 - step) * self.rho0.dot(r)
         self.rho0[self.cluster_id] += step
-        self.rho1 = (1 - step) * self.rho.dot(r)
+        self.rho1 = (1 - step) * self.rho1.dot(r)
         self.rho1[:,self.cluster_id] += step * x
 
     def get_statistics(self, phi):
