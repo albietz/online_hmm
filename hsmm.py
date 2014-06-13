@@ -8,7 +8,7 @@ import sys
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
 
-def alpha_beta(X, pi, A, obs_distr, dur_distr):
+def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=True):
     '''A[i,j] = p(z_{t+1} = j | z_t = i)'''
     T = X.shape[0]
     K = pi.shape[0]
@@ -49,6 +49,9 @@ def alpha_beta(X, pi, A, obs_distr, dur_distr):
         dmax = min(D, T-t)
         b = lbeta[t:t+dmax] + lD[:dmax] + np.cumsum(lemissions[t:t+dmax], axis=0)
         lbetastar[t] = np.logaddexp.reduce(b, axis=0)
+        if dmax < D and right_censoring:
+            lbetastar[t] = np.logaddexp(lbetastar[t],
+                np.logaddexp.reduce(lD[dmax:], axis=0) + np.sum(lemissions[t:], axis=0))
         if t > 0:
             b = lbetastar[t] + lA
             lbeta[t-1] = np.logaddexp.reduce(b, axis=1)
