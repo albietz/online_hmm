@@ -129,13 +129,11 @@ def pairwise_smoothing(X, lalpha, lbetastar, A):
     T, K = lalpha.shape
     lA = np.log(A)
 
-    log_p = np.zeros((T,K,K))
-    for t in range(T-1):
-        log_p[t,:,:] = lalpha[t][:,nax] + lA + lbetastar[t]
+    log_p = lalpha[:T-1,:,nax] + lA[nax,:,:] + lbetastar[1:,nax,:]
 
-    log_p2 = log_p.reshape(T, K*K)
+    log_p2 = log_p.reshape(T-1, K*K)
     log_p = np.reshape(log_p2 - np.logaddexp.reduce(log_p2, axis=1)[:,nax],
-                       (T,K,K))
+                       (T-1,K,K))
 
     return log_p
 
