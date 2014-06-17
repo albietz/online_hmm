@@ -14,13 +14,12 @@ def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=True):
     K = pi.shape[0]
     D = len(dur_distr)
     lA = np.log(A)
-    lemissions = np.zeros((T,K))
-    for k in range(K):
-        lemissions[:,k] = obs_distr[k].log_pdf(X)
 
-    # lD[d,i] = log p(d|i)
+    # lemissions[t,k] = log p(x_t|k), shape: (T,K)
+    lemissions = np.hstack(d.log_pdf(X)[:,nax] for d in obs_distr)
+
+    # lD[d,i] = log p(d|i), shape: (D,K)
     lD = np.hstack(d.log_vec()[:,nax] for d in dur_distr)
-    D = lD.shape[0]
 
     # Forward messages
     lalpha = np.zeros((T, K))       # 1 to T
@@ -63,12 +62,11 @@ def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
     K = pi.shape[0]
 
     lA = np.log(A)
-    lemissions = np.zeros((T,K))
-    for k in range(K):
-        if use_distance:
-            lemissions[:,k] = - obs_distr[k].distances(X)
-        else:
-            lemissions[:,k] = obs_distr[k].log_pdf(X)
+    # lemissions[t,k] = log p(x_t|k), shape: (T,K)
+    if use_distance:
+        lemissions = np.hstack(-d.distances(X)[:,nax] for d in obs_distr)
+    else:
+        lemissions = np.hstack(d.log_pdf(X)[:,nax] for d in obs_distr)
 
     # lD[d,i] = log p(d|i)
     lD = np.hstack(d.log_vec()[:,nax] for d in dur_distr)
