@@ -8,11 +8,12 @@ import sys
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
 
+from IPython.core.debugger import Tracer
+
 def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=True):
     '''A[i,j] = p(z_{t+1} = j | z_t = i)'''
     T = X.shape[0]
     K = pi.shape[0]
-    D = len(dur_distr)
     lA = np.log(A)
 
     # lemissions[t,k] = log p(x_t|k), shape: (T,K)
@@ -20,6 +21,7 @@ def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=True):
 
     # lD[d,i] = log p(d|i), shape: (D,K)
     lD = np.hstack(d.log_vec()[:,nax] for d in dur_distr)
+    D = lD.shape[0]
 
     # Forward messages
     lalpha = np.zeros((T, K))       # 1 to T
@@ -135,13 +137,37 @@ def pairwise_smoothing(X, lalpha, lbetastar, A):
 
     return log_p
 
+def posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr):
+    '''lDpost[d,i] = log \hat{p}(d|i)'''
+    T, K = lalphastar.shape
+    # lemissions[t,k] = log p(x_t|k), shape: (T,K)
+    lemissions = np.hstack(d.log_pdf(X)[:,nax] for d in obs_distr)
+
+    # lD[d,i] = log p(d|i)
+    lD = np.hstack(d.log_vec()[:,nax] for d in dur_distr)
+    D = lD.shape[0]
+
+    lDpost = -np.inf * np.ones((T, D, K))
+    lemissions_cum = np.cumsum(lemissions, axis=0)
+    for d in range(D):
+        lDpost[:T-d,d] = lalphastar[:T-d] + lD[d][nax,:] + lemissions_cum[d:] - \
+                lemissions_cum[:T-d] + lbeta[d:]
+
+    # Tracer()()
+    lDpost = np.logaddexp.reduce(lDpost, axis=0)
+    return lDpost - np.logaddexp.reduce(lDpost, axis=0)[nax,:]
+
 def log_likelihood(pi, lbetastar):
     '''p(u_1, ..., u_T) = \sum_i pi(i) beta*_0(i)'''
     return np.logaddexp.reduce(np.log(pi) + lbetastar[0])
 
-def em_hsmm(X, pi, init_obs_distr, dur_distr, n_iter=10, Xtest=None, fit_durations=False):
+def em_hsmm(X, pi, init_obs_distr, init_dur_distr, n_iter=10, Xtest=None, fit_durations=False):
     pi = pi.copy()
     obs_distr = copy.deepcopy(init_obs_distr)
+    if fit_durations:
+        dur_distr = copy.deepcopy(init_dur_distr)
+    else:
+        dur_distr = init_dur_distr
     T = X.shape[0]
     K = len(obs_distr)
 
@@ -161,6 +187,8 @@ def em_hsmm(X, pi, init_obs_distr, dur_distr, n_iter=10, Xtest=None, fit_duratio
         # E-step
         tau = np.exp(smoothing(lalpha, lalphastar, lbeta, lbetastar))
         tau_pairs = np.exp(pairwise_smoothing(X, lalpha, lbetastar, A))
+        if fit_durations:
+            post_dur = np.exp(posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr))
 
         # M-step
         pi = tau[0,:] / np.sum(tau[0,:])
@@ -171,7 +199,7 @@ def em_hsmm(X, pi, init_obs_distr, dur_distr, n_iter=10, Xtest=None, fit_duratio
         for j in range(K):
             obs_distr[j].max_likelihood(X, tau[:,j])
             if fit_durations:
-                raise NotImplementedError
+                dur_distr[j].max_likelihood(post_dur[:,j])
 
         lalpha, lalphastar, lbeta, lbetastar = \
                 alpha_beta(X, pi, A, obs_distr, dur_distr)

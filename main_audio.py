@@ -149,11 +149,12 @@ if __name__ == '__main__':
             ass_plots.append(('HMM MAP-EM', np.array(seq)))
 
         elif alg == algos.hsmm:
-            dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
+            # dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
             # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
-                    hsmm.em_hsmm(X, init_pi, init_obs_distr, dur_distr)
+                    hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, fit_durations=True)
             print 'HSMM EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_train[-1])
 
             ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
@@ -163,7 +164,7 @@ if __name__ == '__main__':
 
         elif alg == algos.map_hsmm:
             t = time.time()
-            seq, obs_distr, dur_distr, energies = hsmm.map_em_hsmm(X, init_obs_distr, dur_distr)
+            seq, obs_distr, dur_distr, energies = hsmm.map_em_hsmm(X, init_obs_distr, init_dur_distr)
             print 'HSMM MAP-EM: {}s, final energy: {}'.format(time.time() - t, energies[-1])
             ass_plots.append(('HSMM MAP-EM', np.array(seq)))
 
@@ -192,9 +193,9 @@ if __name__ == '__main__':
 
         elif alg == algos.online_em_hsmm:
             step = lambda t: 1. / (t ** 0.6)
-            dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
             t = time.time()
-            seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, dur_distr, t_min=100, step=step)
+            seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
             print 'HSMM online EM: {}s'.format(time.time() - t)
 
             ass_plots.append(('HSMM online EM', seq))

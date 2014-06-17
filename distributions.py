@@ -5,16 +5,16 @@ from scipy import stats
 
 class Distribution(object):
     def log_pdf(self, X):
-        pass
+        raise NotImplementedError
 
     def pdf(self, X):
-        pass
+        raise NotImplementedError
 
     def distances(self, X):
-        pass
+        raise NotImplementedError
 
     def max_likelihood(self, X, weights):
-        pass
+        raise NotImplementedError
 
 class Gaussian(Distribution):
     def __init__(self, mean, cov):
@@ -153,7 +153,7 @@ class DurationDistribution(Distribution):
         self.D = D
 
     def log_pmf(self, X):
-        pass
+        raise NotImplementedError
 
     def log_vec(self):
         return self.log_pmf(np.arange(1,self.D+1))
@@ -170,6 +170,10 @@ class PoissonDuration(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.poisson.logpmf(X, self.lmbda)
+
+    def max_likelihood(self, probs):
+        assert self.D == len(probs)
+        self.lmbda = np.arange(1., self.D + 1).dot(probs)
 
     def sample(self, size=None):
         return stats.poisson.rvs(self.lmbda, size=size)
