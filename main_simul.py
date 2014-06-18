@@ -48,22 +48,28 @@ if __name__ == '__main__':
                      distributions.Gaussian(np.array([-2., -3.]),
                          np.array([[3., -1.], [-1., 2.]]))]
 
-        dur_distr = [distributions.NegativeBinomial(15, 0.3, D=100) for _ in range(K)]
+        # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=100) for _ in range(K)]
+        dur_distr = [distributions.PoissonDuration(20, D=100),
+                     distributions.PoissonDuration(40, D=100),
+                     distributions.PoissonDuration(60, D=100)]
         seq, X = gen_data.gen_hsmm(pi, A, obs_distr, dur_distr, 1000)
 
         init_pi = np.ones(K) / K
         init_obs_distr = [distributions.Gaussian(np.array([1., 0.]), np.eye(2)),
                           distributions.Gaussian(np.array([0., 1.]), np.eye(2)),
                           distributions.Gaussian(np.array([-1., 0.]), np.eye(2))]
-        init_dur_distr = [distributions.NegativeBinomial(15, 0.3, D=100) for _ in range(K)]
+        # init_dur_distr = [distributions.NegativeBinomial(15, 0.3, D=100) for _ in range(K)]
+        init_dur_distr = [distributions.PoissonDuration(50, D=100),
+                          distributions.PoissonDuration(50, D=100),
+                          distributions.PoissonDuration(50, D=100)]
 
         print 'HSMM - batch EM'
         tau, A_batch, obs_distr_batch, dur_distr_batch, pi_batch, ll_train, _ = \
-                hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr)
+                hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, fit_durations=True)
         em_hsmm_seq = np.argmax(tau, axis=1)
 
         step = lambda t: 1. / (t ** 0.6)
         print 'HSMM - online EM'
         online_hsmm_seq, A_online, obs_distr_online, dur_distr_online = \
-                hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=80, step=step)
+                hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=80, step=step, fit_durations=True)
         online_hsmm_ll = hsmm.log_likelihood(pi_batch, hsmm.alpha_beta(X, pi_batch, A_online, obs_distr_online, dur_distr_online)[3])

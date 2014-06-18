@@ -21,6 +21,9 @@ class Gaussian(Distribution):
         self.mean = mean
         self.cov = cov
 
+    def __repr__(self):
+        return '<Gaussian: mean={}, cov={}>'.format(repr(self.mean), repr(self.cov))
+
     @property
     def dim(self):
         return len(self.mean)
@@ -70,6 +73,9 @@ class SquareDistance(Distribution):
         self.mean = mean
         self.sigma2 = sigma2
 
+    def __repr__(self):
+        return '<SquareDistance: mean={}, sigma2={}>'.format(repr(self.mean), repr(self.sigma2))
+
     @property
     def cov(self):
         return self.sigma2 * np.eye(2)
@@ -114,6 +120,9 @@ class KL(Distribution):
     '''Basically a multinomial.'''
     def __init__(self, mean):
         self.mean = mean
+
+    def __repr__(self):
+        return '<KL: mean={}>'.format(repr(self.mean))
 
     @property
     def dim(self):
@@ -181,6 +190,13 @@ class PoissonDuration(DurationDistribution):
     def sample(self, size=None):
         return stats.poisson.rvs(self.lmbda, size=size)
 
+    def new_sufficient_statistics_hsmm(self, cluster_id, K, D):
+        return PoissonSufficientStatisticsHSMM(cluster_id, K, D)
+
+    def online_max_likelihood(self, rho_dur, phi):
+        s0, s1 = rho_dur.get_statistics(phi)
+        self.lmbda = s1 / s0
+
 class NegativeBinomial(DurationDistribution):
     def __init__(self, r, p, D):
         super(NegativeBinomial, self).__init__(D)
@@ -200,6 +216,14 @@ class NegativeBinomial(DurationDistribution):
 
     def sample(self, size=None):
         return stats.nbinom.rvs(self.r, self.p, size=size)
+
+    def new_sufficient_statistics_hsmm(self, cluster_id, K, D):
+        return NegativeBinomialSufficientStatisticsHSMM(cluster_id, K, D)
+
+    def online_max_likelihood(self, rho_dur, phi):
+        s0, s1 = rho_dur.get_statistics(phi)
+        k = s1 / s0
+        self.p = float(self.r) / (self.r + k)
 
 # Sufficient Statistics classes
 class SufficientStatistics(object):
@@ -333,9 +357,7 @@ class TransitionSufficientStatisticsHSMM(SufficientStatistics):
         # rho[i, j, k, d]
         self.rho_pairs = np.zeros((K,K,K,D))
 
-    def online_update(self, r, step):
-        # r(i|j,1) = sum_d r(i,d|j,1)
-        r_marginal = r.sum(1)
+    def online_update(self, r, r_marginal, step):
         rho_pairs = np.zeros(self.rho_pairs.shape)
         rho_pairs[:,:,:,0] = (1 - step) * np.tensordot(self.rho_pairs, r) + \
                 step * np.eye(self.K)[nax,:,:] * r_marginal[:,:,nax]
@@ -344,3 +366,34 @@ class TransitionSufficientStatisticsHSMM(SufficientStatistics):
 
     def get_statistics(self, phi):
         return np.tensordot(self.rho_pairs, phi)
+
+class DurationSufficientStatistics(SufficientStatisticsHSMM):
+    def online_update(self, r, r_marginal, step):
+        raise NotImplementedError
+
+class PoissonSufficientStatisticsHSMM(SufficientStatisticsHSMM):
+    def __init__(self, cluster_id, K, D):
+        super(PoissonSufficientStatisticsHSMM, self).__init__(cluster_id, K, D)
+        # 1{Z_{t-1} = i, Z_t^D = 1}
+        self.rho0 = np.zeros((self.K, self.D))
+        # 1{Z_{t-1} = i, Z_t^D = 1} Z_{t-1}
+        self.rho1 = np.zeros((self.K, self.D))
+
+    def online_update(self, r, r_marginal, step):
+        rho0 = np.zeros(self.rho0.shape)
+        rho0[:,0] = (1 - step) * np.tensordot(self.rho0, r) + \
+                step * r_marginal[self.cluster_id]
+        rho0[:,1:] = (1 - step) * self.rho0[:,:-1]
+        self.rho0 = rho0
+
+        rho1 = np.zeros(self.rho1.shape)
+        rho1[:,0] = (1 - step) * np.tensordot(self.rho1, r) + \
+                step * np.arange(1., self.D + 1).dot(r[self.cluster_id])
+        rho1[:,1:] = (1 - step) * self.rho1[:,:-1]
+        self.rho1 = rho1
+
+    def get_statistics(self, phi):
+        return np.tensordot(self.rho0, phi), np.tensordot(self.rho1, phi)
+
+class NegativeBinomialSufficientStatisticsHSMM(PoissonSufficientStatisticsHSMM):
+    pass  # same as Poisson

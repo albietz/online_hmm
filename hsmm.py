@@ -279,10 +279,13 @@ def online_opt_hsmm(X, lambda1, lambda2, lcost, init_obs_distr=None, dist_cls=di
 
     return seq, obs_distr, cost
 
-def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=None):
+def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=None, fit_durations=False):
     pi = init_pi.copy()
     obs_distr = copy.deepcopy(init_obs_distr)
-    dur_distr = copy.deepcopy(init_dur_distr)
+    if fit_durations:
+        dur_distr = copy.deepcopy(init_dur_distr)
+    else:
+        dur_distr = init_dur_distr
     D = dur_distr[0].D
 
     if step is None:
@@ -303,7 +306,9 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
     rho_A = distributions.TransitionSufficientStatisticsHSMM(K,D)
     rho_obs = [d.new_sufficient_statistics_hsmm(X[0], i, K, D)
                     for i, d in enumerate(obs_distr)]
-    # rho_dur = [d.new_sufficient_statistics(i, K) for i, d in enumerate(obs_distr)]
+    if fit_durations:
+        rho_dur = [d.new_sufficient_statistics_hsmm(i, K, D)
+                        for i, d in enumerate(dur_distr)]
 
     for t in range(1,T):
         sys.stdout.write('.')
@@ -330,10 +335,13 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
         # SA E-step
         s = step(t)
 
-        rho_A.online_update(r, s)
+        # r(i|j,1) = sum_d r(i,d|j,1)
+        r_marginal = r.sum(1)
+        rho_A.online_update(r, r_marginal, s)
         for k in range(K):
             rho_obs[k].online_update(X[t], r, s)
-            # rho_dur[k].online_update(r, s)
+            if fit_durations:
+                rho_dur[k].online_update(r, r_marginal, s)
 
         # M-step
         if t < t_min:
@@ -344,6 +352,7 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
 
         for k in range(K):
             obs_distr[k].online_max_likelihood(rho_obs[k], phi)
-            # dur_distr[k].online_max_likelihood(rho_dur[k], phi)
+            if fit_durations:
+                dur_distr[k].online_max_likelihood(rho_dur[k], phi)
 
     return seq, A, obs_distr, dur_distr
