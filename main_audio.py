@@ -67,6 +67,8 @@ if __name__ == '__main__':
                       help='number of clusters', default=10)
     parser.add_option('-r', '--repeat', dest='repeat', default=1, type='int',
                       help='repeat input')
+    parser.add_option('--iter', dest='n_iter', default=10, type='int',
+                      help='EM iterations')
     options, args = parser.parse_args()
 
     X = loadmat(options.filename)['X'].T
@@ -120,6 +122,8 @@ if __name__ == '__main__':
         norm = X[0].sum()
         init_obs_distr = [distributions.KL(norm*np.random.dirichlet(np.ones(X.shape[1])))
                 for k in range(K)]
+    elif options.init == 'prev':
+        print 'using existing variables, must be in IPython interactive mode! (%run -i)'
     else:
         print '{} initialization is not available'.format(options.init)
         sys.exit(0)
@@ -134,7 +138,7 @@ if __name__ == '__main__':
 
         elif alg == algos.hmm:
             t = time.time()
-            tau, A, obs_distr, pi, ll_train, _ = hmm.em_hmm(X, init_pi, init_obs_distr)
+            tau, A, obs_distr, pi, ll_train, _ = hmm.em_hmm(X, init_pi, init_obs_distr, n_iter=options.n_iter)
             print 'HMM EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_train[-1])
 
             ass_plots.append(('HMM smoothing', np.argmax(tau, axis=1)))
@@ -154,7 +158,7 @@ if __name__ == '__main__':
             # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
-                    hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, fit_durations=False)
+                    hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, n_iter=options.n_iter, fit_durations=False)
             print 'HSMM EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_train[-1])
 
             ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
