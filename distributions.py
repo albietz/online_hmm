@@ -171,6 +171,9 @@ class PoissonDuration(DurationDistribution):
     def log_pmf(self, X):
         return stats.poisson.logpmf(X, self.lmbda)
 
+    def __repr__(self):
+        return '<Poisson: lambda={}>'.format(self.lmbda)
+
     def max_likelihood(self, probs):
         assert self.D == len(probs)
         self.lmbda = np.arange(1., self.D + 1).dot(probs)
@@ -186,6 +189,14 @@ class NegativeBinomial(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.nbinom.logpmf(X, self.r, self.p)
+
+    def __repr__(self):
+        return '<NegativeBinomial: r={}, p={}>'.format(self.r, self.p)
+
+    def max_likelihood(self, probs):
+        # fixed r, this only estimates p
+        k = np.arange(1., self.D + 1).dot(probs)
+        self.p = float(self.r) / (self.r + k)
 
     def sample(self, size=None):
         return stats.nbinom.rvs(self.r, self.p, size=size)

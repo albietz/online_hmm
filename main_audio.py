@@ -149,12 +149,12 @@ if __name__ == '__main__':
             ass_plots.append(('HMM MAP-EM', np.array(seq)))
 
         elif alg == algos.hsmm:
-            init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
-            # dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
             # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
-                    hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, fit_durations=True)
+                    hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, fit_durations=False)
             print 'HSMM EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_train[-1])
 
             ass_plots.append(('HSMM smoothing', np.argmax(tau, axis=1)))
