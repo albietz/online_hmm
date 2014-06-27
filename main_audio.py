@@ -155,7 +155,7 @@ if __name__ == '__main__':
         elif alg == algos.hsmm:
             # init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
             init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
-            # dur_distr = [distributions.NegativeBinomial(15, 0.3, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(100, 0.05, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
                     hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, n_iter=options.n_iter, fit_durations=False)
@@ -198,6 +198,7 @@ if __name__ == '__main__':
         elif alg == algos.online_em_hsmm:
             step = lambda t: 1. / (t ** 0.6)
             init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.PoissonDuration(150, D=200) for _ in range(K)]
             t = time.time()
             seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
             print 'HSMM online EM: {}s'.format(time.time() - t)

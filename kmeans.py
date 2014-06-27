@@ -7,6 +7,9 @@ def distortion(X, assignments, centers):
     deltas = X - centers[assignments,:]
     return np.sum(deltas * deltas)
 
+class BadCentroids(Exception):
+    pass
+
 def kmeans(X, init_centroids):
     N = X.shape[0]
     K = len(init_centroids)
@@ -21,6 +24,8 @@ def kmeans(X, init_centroids):
         distances = np.zeros((N, K))
         for k in range(K):
             distances[:,k] = centroids[k].distances(X)
+        if np.any(np.isnan(distances)):
+            raise BadCentroids
 
         assignments = np.argmin(distances, axis=1)
         dist = np.min(distances, axis=1).sum()
@@ -34,7 +39,7 @@ def kmeans(X, init_centroids):
 
     return assignments, centroids, distortions
 
-def kmeans_best_of_n(X, K, n_trials, dist_cls=None):
+def kmeans_best_of_n(X, K, n_trials, dist_cls=None, debug=False):
     '''
     Tries 'n_trials' random initializations and returns
     result with lowest distortion.
@@ -42,12 +47,19 @@ def kmeans_best_of_n(X, K, n_trials, dist_cls=None):
     dist_cls = dist_cls or distributions.SquareDistance
     d_best = None
     assignments, centroids, distortions = None, None, None
-    for _ in range(n_trials):
+    for i in range(n_trials):
         perm = np.random.permutation(X.shape[0])
         clusters = []
         for k in range(K):
             clusters.append(dist_cls(X[perm[k],:]))
-        a, c, d = kmeans(X, clusters)
+        try:
+            a, c, d = kmeans(X, clusters)
+        except BadCentroids:
+            print 'Bad centroids, skipping'
+            continue
+
+        if debug:
+            print 'K-means trial {}: {}'.format(i+1, d[-1])
         if d_best is None or d[-1] < d_best:
             assignments, centroids, distortions = a, c, d
 

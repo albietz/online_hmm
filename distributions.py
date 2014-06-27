@@ -164,13 +164,19 @@ class DurationDistribution(Distribution):
     def log_pmf(self, X):
         raise NotImplementedError
 
+    def pmf(self, X):
+        raise NotImplementedError
+
     def log_vec(self):
         return self.log_pmf(np.arange(1,self.D+1))
+
+    def vec(self):
+        return self.pmf(np.arange(1,self.D+1))
 
     def d_frac(self):
         v = self.log_vec()
         D = np.hstack((np.cumsum(v[::-1])[::-1], 0.))
-        return D[1:] / D[:-1]
+        return np.clip(D[1:] / D[:-1], 0, 1 - 1e-16)
 
 class PoissonDuration(DurationDistribution):
     def __init__(self, lmbda, D):
@@ -179,6 +185,9 @@ class PoissonDuration(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.poisson.logpmf(X, self.lmbda)
+
+    def pmf(self, X):
+        return stats.poisson.pmf(X, self.lmbda)
 
     def __repr__(self):
         return '<Poisson: lambda={}>'.format(self.lmbda)
@@ -205,6 +214,9 @@ class NegativeBinomial(DurationDistribution):
 
     def log_pmf(self, X):
         return stats.nbinom.logpmf(X, self.r, self.p)
+
+    def pmf(self, X):
+        return stats.nbinom.pmf(X, self.r, self.p)
 
     def __repr__(self):
         return '<NegativeBinomial: r={}, p={}>'.format(self.r, self.p)

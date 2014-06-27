@@ -98,7 +98,6 @@ def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
     lgamma[t] = np.max(a, axis=0)
     back[t] = np.argmax(a, axis=0)
 
-    # Tracer()()
     # recover MAP from back-pointers
     t = T - 1
     seq = []
@@ -153,7 +152,6 @@ def posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr):
         lDpost[:T-d,d] = lalphastar[:T-d] + lD[d][nax,:] + lemissions_cum[d:] - \
                 lemissions_cum[:T-d] + lbeta[d:]
 
-    # Tracer()()
     lDpost = np.logaddexp.reduce(lDpost, axis=0)
     return lDpost - np.logaddexp.reduce(lDpost, axis=0)[nax,:]
 
@@ -346,7 +344,6 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
         # M-step
         if t < t_min:
             continue
-        # Tracer()()
         A = rho_A.get_statistics(phi)
         A /= A.sum(axis=1)[:,nax]
 
