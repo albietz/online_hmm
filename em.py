@@ -8,6 +8,8 @@ from matplotlib.mlab import bivariate_normal
 from numpy import newaxis as nax
 from numpy.linalg import det, inv
 
+from IPython.core.debugger import Tracer
+
 def log_likelihood(X, obs_distr, pi):
     N = X.shape[0]
     K = len(obs_distr)
@@ -41,12 +43,14 @@ def em(X, init_obs_distr, assignments=None, n_iter=10, Xtest=None):
 
         # normalize each line
         tau = tau / np.sum(tau, axis=1)[:,nax]
+        print np.bincount(np.argmax(tau,1))
 
         # M-step
         pi = np.sum(tau, axis=0) / N
 
         for j in range(K):
             obs_distr[j].max_likelihood(X, tau[:,j])
+        # Tracer()()
 
         ll_train.append(log_likelihood(X, obs_distr, pi))
         if Xtest is not None:

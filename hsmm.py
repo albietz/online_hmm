@@ -103,7 +103,7 @@ def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
     seq = []
     i = int(np.argmax(lgamma[t]))
     d = int(back[t,i])
-    while t > 0:
+    while t >= 0:
         seq.extend([i] * (d+1))
         i = int(backstar[t-d,i])
         t = t - d - 1

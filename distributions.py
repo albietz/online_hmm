@@ -78,7 +78,13 @@ class SquareDistance(Distribution):
 
     @property
     def cov(self):
-        return self.sigma2 * np.eye(2)
+        return self.sigma2 * np.eye(len(self.mean))
+
+    def to_gaussian(self):
+        if self.sigma2 is not None:
+            return Gaussian(self.mean, self.cov)
+        else:
+            return Gaussian(self.mean, np.eye(len(self.mean)))
 
     @property
     def dim(self):
@@ -100,7 +106,9 @@ class SquareDistance(Distribution):
             self.sigma2 = 0.5 * dists.dot(weights) / np.sum(weights)
 
     def log_pdf(self, X):
-        assert self.sigma2 is not None, 'only for isotropic Gaussian'
+        if self.sigma2 is None:
+            return -self.distances(X)
+
         d = self.mean.shape[0]
         diff = X - self.mean
         dists = np.sum(diff*diff, axis=1)
@@ -108,7 +116,9 @@ class SquareDistance(Distribution):
                 - 0.5 * dists / self.sigma2
 
     def pdf(self, X):
-        assert self.sigma2 is not None, 'only for isotropic Gaussian'
+        if self.sigma2 is None:
+            return np.exp(-self.distances(X))
+
         d = self.mean.shape[0]
         diff = X - self.mean
         dists = np.sum(diff*diff, axis=1)
@@ -156,6 +166,29 @@ class KL(Distribution):
     def online_max_likelihood(self, rho_obs, phi):
         s0, s1 = rho_obs.get_statistics(phi)
         self.mean = s1 / s0
+
+class ItakuraSaito(Distribution):
+    def __init__(self, mean):
+        self.mean = mean
+
+    def __repr__(self):
+        return '<IS: mean={}>'.format(repr(self.mean))
+
+    def distances(self, X):
+        xy = X / self.mean[nax,:]
+        return np.sum(xy - np.log(xy) - 1, axis=1)
+
+    def log_pdf(self, X):
+        return -self.distances(X)
+
+    def pdf(self, X):
+        return np.exp(-self.distances(X))
+
+    def max_likelihood(self, X, weights):
+        if weights.dtype == np.bool:
+            self.mean = X[weights,:].mean(axis=0)
+        else:
+            self.mean = np.sum(weights[:,nax] * X, axis=0) / np.sum(weights)
 
 class DurationDistribution(Distribution):
     def __init__(self, D):

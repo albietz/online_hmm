@@ -64,7 +64,7 @@ def viterbi(X, pi, A, obs_distr, use_distance=False):
     for t in reversed(range(1, T)):
         seq.append(back[t,seq[-1]])
 
-    return np.array(list(reversed(seq))), lgamma
+    return np.array(list(reversed(seq)), dtype=int), lgamma
 
 def smoothing(lalpha, lbeta):
     '''Computes all the p(q_t | u_1, ..., u_T)'''
@@ -115,9 +115,10 @@ def em_hmm(X, pi, init_obs_distr, n_iter=10, Xtest=None):
         tau_pairs = np.exp(pairwise_smoothing(X, lalpha, lbeta, A, obs_distr))
 
         # M-step
-        pi = tau[0,:] / np.sum(tau[0,:])
+        prior = 1e-6
+        pi = (prior + tau[0,:]) / np.sum(prior + tau[0,:])
 
-        A = np.sum(tau_pairs, axis=0)
+        A = prior + np.sum(tau_pairs, axis=0)
         A = A / A.sum(axis=1)[:,nax]
 
         for j in range(K):
