@@ -196,7 +196,7 @@ def online_opt_hmm(X, lambda1, lambda2, init_obs_distr=None, dist_cls=distributi
 
     return seq, obs_distr, cost
 
-def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
+def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, monitor=None):
     pi = init_pi.copy()
     obs_distr = copy.deepcopy(init_obs_distr)
 
@@ -219,6 +219,15 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
     # rho[i, j, k]
     rho_pairs = np.zeros((K,K,K))
     rho_obs = [d.new_sufficient_statistics_hmm(X[0], i, K) for i, d in enumerate(obs_distr)]
+
+    ll_test = []
+    if Xtest is not None:
+        lalpha_test, lbeta_test = alpha_beta(Xtest, pi, A, obs_distr)
+        ll_test.append(log_likelihood(lalpha_test, lbeta_test))
+
+    monitor_vals = []
+    if monitor:
+        monitor_vals.append(monitor(A, obs_distr))
 
     for t in range(1,T):
         # r[i,j] = p(Z_{t-1} = i | Z_t = j, x_{1:t-1})
@@ -248,7 +257,83 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None):
         for k in range(K):
             obs_distr[k].online_max_likelihood(rho_obs[k], phi)
 
-    return seq, tau, A, obs_distr
+        if Xtest is not None and t % 100 == 0:
+            lalpha_test, lbeta_test = alpha_beta(Xtest, pi, A, obs_distr)
+            ll_test.append(log_likelihood(lalpha_test, lbeta_test))
+        if monitor:
+            monitor_vals.append(monitor(A, obs_distr))
+
+    return seq, tau, A, obs_distr, ll_test, monitor_vals
+
+def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, monitor=None):
+    pi = init_pi.copy()
+    obs_distr = copy.deepcopy(init_obs_distr)
+
+    if step is None:
+        step = lambda t: 1. / t
+
+    T = X.shape[0]
+    K = len(obs_distr)
+
+    A = 1. / K * np.ones((K,K))
+    seq = np.zeros(T)
+    tau = np.zeros((T, K))
+
+    emissions = np.array([d.pdf(X[0]) for d in obs_distr]).flatten()
+    phi = pi * emissions
+    phi /= phi.sum()
+    tau[0] = phi
+    seq[0] = np.argmax(phi)
+
+    s_pairs = distributions.TransitionISufficientStatisticsHMM(K)
+    s_obs = [d.new_incremental_sufficient_statistics_hmm(X[0], phi, i, K) for i, d in enumerate(obs_distr)]
+
+    ll_test = []
+    if Xtest is not None:
+        lalpha_test, lbeta_test = alpha_beta(Xtest, pi, A, obs_distr)
+        ll_test.append(log_likelihood(lalpha_test, lbeta_test))
+
+    monitor_vals = []
+    if monitor:
+        monitor_vals.append(monitor(A, obs_distr))
+
+    for t in range(1,T):
+        # E-step
+        emissions = np.array([d.pdf(X[t]) for d in obs_distr]).flatten()
+        q = A * emissions
+        q /= q.sum(axis=1)[:,nax]
+        phi_q = phi[:,nax] * q
+        phi = phi_q.sum(axis=0)
+
+        # compute filter
+        tau[t] = emissions * A.T.dot(tau[t-1])
+        tau[t] /= tau[t].sum()
+        seq[t] = np.argmax(tau[t])
+
+        # sufficient statistics updates
+        s = step(t)
+        s_pairs.online_update(phi_q, s)
+
+        for k in range(K):
+            s_obs[k].online_update(X[t], phi, s)
+
+        # M-step
+        if t < t_min:
+            continue
+        # Tracer()()
+        A = s_pairs.get_statistics()
+        A /= A.sum(axis=1)[:,nax]
+
+        for k in range(K):
+            obs_distr[k].online_max_likelihood(s_obs[k])
+
+        if Xtest is not None and t % 100 == 0:
+            lalpha_test, lbeta_test = alpha_beta(Xtest, pi, A, obs_distr)
+            ll_test.append(log_likelihood(lalpha_test, lbeta_test))
+        if monitor:
+            monitor_vals.append(monitor(A, obs_distr))
+
+    return seq, tau, A, obs_distr, ll_test, monitor_vals
 
 if __name__ == '__main__':
     X = np.loadtxt('EMGaussian.data')

@@ -14,24 +14,26 @@ import time
 from numpy import newaxis as nax
 from scipy.io import loadmat
 
-def plot_segmentation(X, assignments):
+def plot_segmentation(X, assignments, start=0, end=None):
+    if end is None:
+        end = X.shape[0]
     gs = gridspec.GridSpec(2 + len(assignments), 4)
     for i, (title, ass) in enumerate(assignments):
         plt.subplot(gs[i,:])
-        x,y = np.meshgrid(np.arange(len(ass)),(0,1))
+        x,y = np.meshgrid(np.arange(end-start),(0,1))
 
-        c = ass[nax,:].astype(np.float) / np.max(ass)
+        c = ass[nax,start:end].astype(np.float) / np.max(ass)
 
         plt.pcolor(x,y,c,vmin=0,vmax=1)
         plt.ylim(0,1)
-        plt.xlim(0, len(ass))
+        plt.xlim(0, end-start)
         plt.yticks([])
         plt.xticks([])
         plt.title(title)
         # plt.bar(np.arange(len(ass)), ass+1, width=1.)
 
     plt.subplot(gs[-2:,:])
-    plt.imshow(np.log(X.T), aspect='auto')
+    plt.imshow(np.log(X[start:end].T), aspect='auto')
     plt.title('Spectrogram')
     plt.gcf().set_tight_layout(True)
 
@@ -46,6 +48,7 @@ class algos:
     online_opt_hsmm = 8
     online_em_hmm = 9
     online_em_hsmm = 10
+    incremental_em_hmm = 11
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
@@ -71,6 +74,8 @@ if __name__ == '__main__':
     parser.add_option('--iter', dest='n_iter', default=10, type='int',
                       help='EM iterations')
     parser.add_option('-n', dest='n', default=5, type='float')
+    parser.add_option('--start', dest='start', default=0, type='int')
+    parser.add_option('--end', dest='end', default=None, type='int')
     options, args = parser.parse_args()
 
     matfile = loadmat(options.filename)
@@ -82,6 +87,7 @@ if __name__ == '__main__':
     X = matfile['X'].T
     X0 = X / np.sum(X,axis=1)[:,nax]
     X = options.n * X0
+    X = X[options.start:options.end]
 
     if options.repeat > 1:
         X = np.vstack((X,) * options.repeat)
@@ -209,7 +215,7 @@ if __name__ == '__main__':
         elif alg == algos.online_em_hmm:
             step = lambda t: 1. / (t ** 0.6)
             t = time.time()
-            seq, tau, A, obs_distr = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step)
+            seq, tau, A, obs_distr, _, _ = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step)
             print 'HMM online EM: {}s'.format(time.time() - t)
 
             seqs[alg] = seq
@@ -225,6 +231,16 @@ if __name__ == '__main__':
 
             seqs[alg] = seq
             ass_plots.append(('HSMM online EM', seq))
+
+        elif alg == algos.incremental_em_hmm:
+            step = lambda t: 1. / (t ** 0.6)
+            # step = lambda t: 1. / t
+            t = time.time()
+            seq, tau, A, obs_distr, _, _ = hmm.incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step)
+            print 'HMM incremental EM: {}s'.format(time.time() - t)
+
+            seqs[alg] = seq
+            ass_plots.append(('HMM incremental EM', seq))
 
     prfs = {}
     if ground_truth is not None:

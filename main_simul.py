@@ -18,7 +18,8 @@ if __name__ == '__main__':
                      distributions.Gaussian(np.array([-2., 3.]),
                          np.array([[3., -1.], [-1., 2.]]))]
 
-        seq, X = gen_data.gen_hmm(pi, A, obs_distr, 1000)
+        seq, X = gen_data.gen_hmm(pi, A, obs_distr, 10000)
+        seq_test, Xtest = gen_data.gen_hmm(pi, A, obs_distr, 1000)
 
         init_pi = np.ones(K) / K
         init_obs_distr = [distributions.Gaussian(np.array([1., 0.]), np.eye(2)),
@@ -26,13 +27,19 @@ if __name__ == '__main__':
 
         # HMM
         print 'HMM - batch EM'
-        tau, A_batch, obs_distr_batch, pi_batch, ll_train, _ = hmm.em_hmm(X, init_pi, init_obs_distr)
+        tau, A_batch, obs_distr_batch, pi_batch, ll_train, ll_test = hmm.em_hmm(X, init_pi, init_obs_distr, Xtest=Xtest)
         em_hmm_seq = np.argmax(tau, axis=1)
 
-        step = lambda t: 1. / (t ** 0.6)
+        step = lambda t: 1. / (t ** 0.7)
         print 'HMM - online EM'
-        online_hmm_seq, tau, A_online, obs_distr_online = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=80, step=step)
+        def monitor(A, obs_distr):
+            return obs_distr[0].mean[0]
+
+        online_hmm_seq, tau, A_online, obs_distr_online, ll_test_online, mon_online = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=80, step=step, Xtest=None, monitor=monitor)
         online_hmm_ll = hmm.log_likelihood(*hmm.alpha_beta(X, pi_batch, A_online, obs_distr_online))
+
+        incr_hmm_seq, tau, A_incr, obs_distr_incr, ll_test_incr, mon_incr = hmm.incremental_em_hmm(X, init_pi, init_obs_distr, t_min=80, step=step, Xtest=None, monitor=monitor)
+        incr_hmm_ll = hmm.log_likelihood(*hmm.alpha_beta(X, pi_batch, A_incr, obs_distr_incr))
 
     elif sys.argv[1] == 'HSMM':
         # HSMM

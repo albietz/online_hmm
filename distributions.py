@@ -62,8 +62,14 @@ class Gaussian(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return GaussianSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def online_max_likelihood(self, rho_obs, phi):
-        s0, s1, s2 = rho_obs.get_statistics(phi)
+    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id, K):
+        return GaussianISufficientStatisticsHMM(x, phi, cluster_id, K, self.dim)
+
+    def online_max_likelihood(self, rho_obs, phi=None):
+        if phi is None:
+            s0, s1, s2 = rho_obs.get_statistics()
+        else:
+            s0, s1, s2 = rho_obs.get_statistics(phi)
         self.mean = s1 / s0
         self.cov = s2 / s0 - self.mean[:,nax] * self.mean
 
@@ -126,6 +132,9 @@ class SquareDistance(Distribution):
         return 1. / np.sqrt((2*np.pi*self.sigma2)**d) \
                 * np.exp(-0.5 * dists / self.sigma2)
 
+    def sample(self, size=1):
+        return np.random.multivariate_normal(self.mean, self.cov, size)
+
 class KL(Distribution):
     '''Basically a multinomial.'''
     def __init__(self, mean):
@@ -157,14 +166,25 @@ class KL(Distribution):
     def pdf(self, X):
         return np.exp(X.dot(np.log(self.mean)))
 
+    def sample(self, size=1, n=100):
+        Z = self.mean.sum()
+        x = np.random.multinomial(n, self.mean/Z, size=int(size))
+        return Z * x.astype('float64') / x.sum(1)[:,nax]
+
     def new_sufficient_statistics_hmm(self, x, cluster_id, K):
         return KLSufficientStatisticsHMM(x, cluster_id, K, self.dim)
 
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return KLSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def online_max_likelihood(self, rho_obs, phi):
-        s0, s1 = rho_obs.get_statistics(phi)
+    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id, K):
+        return KLISufficientStatisticsHMM(x, phi, cluster_id, K, self.dim)
+
+    def online_max_likelihood(self, rho_obs, phi=None):
+        if phi is None:
+            s0, s1 = rho_obs.get_statistics()
+        else:
+            s0, s1 = rho_obs.get_statistics(phi)
         self.mean = s1 / s0
 
 class ItakuraSaito(Distribution):
@@ -442,3 +462,63 @@ class PoissonSufficientStatisticsHSMM(SufficientStatisticsHSMM):
 
 class NegativeBinomialSufficientStatisticsHSMM(PoissonSufficientStatisticsHSMM):
     pass  # same as Poisson
+
+# Sufficient statistics for incremental EM
+class IncrementalSufficientStatistics(object):
+    def online_update(self, x, phi, step):
+        raise NotImplementedError
+
+    def get_statistics(self):
+        raise NotImplementedError
+
+class ISufficientStatisticsHMM(IncrementalSufficientStatistics):
+    def __init__(self, cluster_id, K):
+        self.cluster_id = cluster_id
+        self.K = K
+
+class GaussianISufficientStatisticsHMM(ISufficientStatisticsHMM):
+    def __init__(self, x, phi, cluster_id, K, size):
+        super(GaussianISufficientStatisticsHMM, self).__init__(cluster_id, K)
+        # 1{Z_t = i}
+        self.s0 = phi[self.cluster_id]
+        # 1{Z_t = i} x_t
+        self.s1 = phi[self.cluster_id] * x
+        # 1{Z_t = i} x_t x_t'
+        self.s2 = phi[self.cluster_id] * x[:,nax] * x
+
+    def online_update(self, x, phi, step):
+        self.s0 = (1 - step) * self.s0 + step * phi[self.cluster_id]
+        self.s1 = (1 - step) * self.s1 + step * phi[self.cluster_id] * x
+        self.s2 = (1 - step) * self.s2 + step * phi[self.cluster_id] * x[:,nax] * x
+
+    def get_statistics(self):
+        return self.s0, self.s1, self.s2
+
+class KLISufficientStatisticsHMM(ISufficientStatisticsHMM):
+    def __init__(self, x, phi, cluster_id, K, size):
+        super(KLISufficientStatisticsHMM, self).__init__(cluster_id, K)
+        # 1{Z_t = i}
+        self.s0 = phi[self.cluster_id]
+        # 1{Z_t = i} x_t
+        self.s1 = phi[self.cluster_id] * x
+
+    def online_update(self, x, phi, step):
+        self.s0 = (1 - step) * self.s0 + step * phi[self.cluster_id]
+        self.s1 = (1 - step) * self.s1 + step * phi[self.cluster_id] * x
+
+    def get_statistics(self):
+        return self.s0, self.s1
+
+class TransitionISufficientStatisticsHMM(IncrementalSufficientStatistics):
+    def __init__(self, K):
+        self.K = K
+        # 1{Z_{t-1} = i, Z_t = j}
+        # s[i,j]
+        self.s = np.zeros((K,K))
+
+    def online_update(self, phi_q, step):
+        # phi_q[i,j] = phi_{t-1}[i] q_t[i,j], with q_t[i,j] = q_t(j|i)
+        self.s = (1 - step) * self.s + step * phi_q
+
+    def get_statistics(self):
+        return self.s
