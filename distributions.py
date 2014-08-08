@@ -137,8 +137,18 @@ class SquareDistance(Distribution):
 
 class KL(Distribution):
     '''Basically a multinomial.'''
-    def __init__(self, mean):
+    def __init__(self, mean, tau=None, kappa=None):
         self.mean = mean
+        self.tau = tau
+        self.kappa = kappa
+
+        if tau is None or kappa is None:
+            self.map = False
+            self.tau = 0
+            self.kappa = 0
+        else:
+            assert tau is not None and kappa is not None
+            self.map = True
 
     def __repr__(self):
         return '<KL: mean={}>'.format(repr(self.mean))
@@ -151,8 +161,11 @@ class KL(Distribution):
         return - X.dot(np.log(self.mean))
 
     def max_likelihood(self, X, weights):
-        if weights.dtype == np.bool:
+        if weights.dtype == np.bool and not self.map:
             self.mean = X[weights,:].mean(axis=0)
+        elif self.map:
+            self.mean = (self.tau * self.kappa + np.sum(weights[:,nax] * X, axis=0)) \
+                / (self.tau + np.sum(weights))
         else:
             self.mean = np.sum(weights[:,nax] * X, axis=0) / np.sum(weights)
 
@@ -180,12 +193,17 @@ class KL(Distribution):
     def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id, K):
         return KLISufficientStatisticsHMM(x, phi, cluster_id, K, self.dim)
 
-    def online_max_likelihood(self, rho_obs, phi=None):
+    def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
             s0, s1 = rho_obs.get_statistics()
         else:
             s0, s1 = rho_obs.get_statistics(phi)
-        self.mean = s1 / s0
+
+        if self.map: # MAP
+            assert t is not None
+            self.mean = (self.tau * self.kappa + t * s1) / (self.tau + t * s0)
+        else:  # MLE
+            self.mean = s1 / s0
 
 class ItakuraSaito(Distribution):
     def __init__(self, mean):

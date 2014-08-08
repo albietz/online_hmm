@@ -133,7 +133,7 @@ if __name__ == '__main__':
         init_obs_distr = [distributions.KL(X[perm[k]]) for k in range(K)]
     elif options.init == 'firstex':
         init_pi = np.ones(K) / K
-        init_obs_distr = [distributions.KL(X[k]) for k in range(K)]
+        init_obs_distr = [distributions.KL(X[k], tau=5., lmbda=options.n * np.ones(X.shape[1])/X.shape[1]) for k in range(K)]
     elif options.init == 'rand':
         init_pi = np.ones(K) / K
         norm = X[0].sum()
@@ -174,7 +174,8 @@ if __name__ == '__main__':
 
         elif alg == algos.hsmm:
             # init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
-            init_dur_distr = [distributions.NegativeBinomial(100, 0.2, D=400) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(100, 0.2, D=400) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 40), D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(100, 0.05, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
@@ -223,8 +224,9 @@ if __name__ == '__main__':
 
         elif alg == algos.online_em_hsmm:
             step = lambda t: 1. / (t ** 0.6)
-            init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
-            # init_dur_distr = [distributions.PoissonDuration(150, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 40), D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.PoissonDuration(40, D=200) for _ in range(K)]
             t = time.time()
             seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
             print 'HSMM online EM: {}s'.format(time.time() - t)
