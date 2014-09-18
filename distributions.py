@@ -62,8 +62,8 @@ class Gaussian(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return GaussianSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id, K):
-        return GaussianISufficientStatisticsHMM(x, phi, cluster_id, K, self.dim)
+    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
+        return GaussianISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
 
     def online_max_likelihood(self, rho_obs, phi=None):
         if phi is None:
@@ -75,16 +75,28 @@ class Gaussian(Distribution):
 
 # for euclidian K-means or isotropic Gaussian
 class SquareDistance(Distribution):
-    def __init__(self, mean, sigma2=None):
+    def __init__(self, mean, sigma2=None, tau=None, kappa=None):
         self.mean = mean
         self.sigma2 = sigma2
+
+        self.tau = tau
+        self.kappa = kappa
+
+        if tau is None or kappa is None:
+            self.map = False
+            self.tau = 0
+            self.kappa = 0
+        else:
+            assert tau is not None and kappa is not None
+            self.map = True
 
     def __repr__(self):
         return '<SquareDistance: mean={}, sigma2={}>'.format(repr(self.mean), repr(self.sigma2))
 
     @property
     def cov(self):
-        return self.sigma2 * np.eye(len(self.mean))
+        s2 = self.sigma2 or 1
+        return s2 * np.eye(len(self.mean))
 
     def to_gaussian(self):
         if self.sigma2 is not None:
@@ -97,6 +109,8 @@ class SquareDistance(Distribution):
         return len(self.mean)
 
     def distances(self, X):
+        if len(X.shape) < 2:
+            X = X[nax,:]
         diff = X - self.mean
         return np.sum(diff * diff, axis=1)
 
@@ -112,6 +126,8 @@ class SquareDistance(Distribution):
             self.sigma2 = 0.5 * dists.dot(weights) / np.sum(weights)
 
     def log_pdf(self, X):
+        if len(X.shape) < 2:
+            X = X[nax,:]
         if self.sigma2 is None:
             return -self.distances(X)
 
@@ -122,6 +138,8 @@ class SquareDistance(Distribution):
                 - 0.5 * dists / self.sigma2
 
     def pdf(self, X):
+        if len(X.shape) < 2:
+            X = X[nax,:]
         if self.sigma2 is None:
             return np.exp(-self.distances(X))
 
@@ -135,9 +153,31 @@ class SquareDistance(Distribution):
     def sample(self, size=1):
         return np.random.multivariate_normal(self.mean, self.cov, size)
 
+    def new_sufficient_statistics_hmm(self, x, cluster_id, K):
+        return KLSufficientStatisticsHMM(x, cluster_id, K, self.dim)
+
+    def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
+        return KLSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
+
+    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
+        return KLISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
+
+    def online_max_likelihood(self, rho_obs, phi=None, t=None):
+        if phi is None:
+            s0, s1 = rho_obs.get_statistics()
+        else:
+            s0, s1 = rho_obs.get_statistics(phi)
+
+        if self.map: # MAP
+            assert t is not None
+            self.mean = (self.tau * self.kappa + t * s1) / (self.tau + t * s0)
+        else:  # MLE
+            self.mean = s1 / s0
+
+
 class KL(Distribution):
     '''Basically a multinomial.'''
-    def __init__(self, mean, tau=None, kappa=None):
+    def __init__(self, mean, tau=None, kappa=None, n=100):
         self.mean = mean
         self.tau = tau
         self.kappa = kappa
@@ -149,6 +189,8 @@ class KL(Distribution):
         else:
             assert tau is not None and kappa is not None
             self.map = True
+
+        self.n = n  # number of trials for sampling a multinomial
 
     def __repr__(self):
         return '<KL: mean={}>'.format(repr(self.mean))
@@ -179,9 +221,9 @@ class KL(Distribution):
     def pdf(self, X):
         return np.exp(X.dot(np.log(self.mean)))
 
-    def sample(self, size=1, n=100):
+    def sample(self, size=1):
         Z = self.mean.sum()
-        x = np.random.multinomial(n, self.mean/Z, size=int(size))
+        x = np.random.multinomial(self.n, self.mean/Z, size=int(size))
         return Z * x.astype('float64') / x.sum(1)[:,nax]
 
     def new_sufficient_statistics_hmm(self, x, cluster_id, K):
@@ -190,8 +232,8 @@ class KL(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return KLSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id, K):
-        return KLISufficientStatisticsHMM(x, phi, cluster_id, K, self.dim)
+    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
+        return KLISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
 
     def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
@@ -490,13 +532,12 @@ class IncrementalSufficientStatistics(object):
         raise NotImplementedError
 
 class ISufficientStatisticsHMM(IncrementalSufficientStatistics):
-    def __init__(self, cluster_id, K):
+    def __init__(self, cluster_id):
         self.cluster_id = cluster_id
-        self.K = K
 
 class GaussianISufficientStatisticsHMM(ISufficientStatisticsHMM):
-    def __init__(self, x, phi, cluster_id, K, size):
-        super(GaussianISufficientStatisticsHMM, self).__init__(cluster_id, K)
+    def __init__(self, x, phi, cluster_id, size):
+        super(GaussianISufficientStatisticsHMM, self).__init__(cluster_id)
         # 1{Z_t = i}
         self.s0 = phi[self.cluster_id]
         # 1{Z_t = i} x_t
@@ -513,8 +554,8 @@ class GaussianISufficientStatisticsHMM(ISufficientStatisticsHMM):
         return self.s0, self.s1, self.s2
 
 class KLISufficientStatisticsHMM(ISufficientStatisticsHMM):
-    def __init__(self, x, phi, cluster_id, K, size):
-        super(KLISufficientStatisticsHMM, self).__init__(cluster_id, K)
+    def __init__(self, x, phi, cluster_id, size):
+        super(KLISufficientStatisticsHMM, self).__init__(cluster_id)
         # 1{Z_t = i}
         self.s0 = phi[self.cluster_id]
         # 1{Z_t = i} x_t

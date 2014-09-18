@@ -10,7 +10,7 @@ from numpy.linalg import det, inv
 
 from IPython.core.debugger import Tracer
 
-def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=True):
+def alpha_beta(X, pi, A, obs_distr, dur_distr, right_censoring=False):
     '''A[i,j] = p(z_{t+1} = j | z_t = i)'''
     T = X.shape[0]
     K = pi.shape[0]
@@ -76,8 +76,8 @@ def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
 
     lgamma = np.zeros((T,K))
     lgammastar = np.zeros((T,K))
-    back = np.zeros((T,K))  # back-pointers
-    backstar = np.zeros((T,K))
+    back = np.zeros((T,K), dtype=int)  # back-pointers
+    backstar = np.zeros((T,K), dtype=int)
 
     lgammastar[0] = np.log(pi)
     for t in range(T-1):
@@ -122,6 +122,11 @@ def smoothing(lalpha, lalphastar, lbeta, lbetastar):
 
     tau = np.cumsum(gammastar - np.vstack((np.zeros(K), gamma[:-1])), axis=0)
     return tau
+
+def mpm_sequence(X, pi, A, obs_distr, dur_distr):
+    lalpha, lalphastar, lbeta, lbetastar = alpha_beta(X, pi, A, obs_distr, dur_distr)
+    tau = np.exp(smoothing(lalpha, lalphastar, lbeta, lbetastar))
+    return np.argmax(tau, axis=1)
 
 def pairwise_smoothing(X, lalpha, lbetastar, A):
     '''returns log_p[t,i,j] = log p(q_t = i, q_{t+1} = j|u)'''
@@ -293,7 +298,7 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
     K = len(obs_distr)
 
     A = 1. / K * np.ones((K,K))
-    seq = np.zeros(T)
+    seq = np.zeros(T, dtype=int)
     phi = np.zeros((K, D))
     # tau = np.zeros((T, K))
 
