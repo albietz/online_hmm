@@ -14,7 +14,7 @@ import time
 from numpy import newaxis as nax
 from scipy.io import loadmat
 
-def plot_segmentation(X, assignments, start=0, end=None, gt=None, K=None):
+def plot_segmentation(X, assignments, start=0, end=None, freq_start=0, freq_end=None, gt=None, K=None):
     if end is None:
         end = X.shape[0]
     gs = gridspec.GridSpec(2 + len(assignments), 4)
@@ -34,7 +34,9 @@ def plot_segmentation(X, assignments, start=0, end=None, gt=None, K=None):
         # plt.bar(np.arange(len(ass)), ass+1, width=1.)
 
     plt.subplot(gs[-2:,:])
-    plt.imshow(np.log(X[start:end].T), aspect='auto')
+    if freq_end is None:
+        freq_end = X.shape[1]
+    plt.imshow(np.log(X[start:end, freq_start:freq_end].T), aspect='auto')
     plt.title('Spectrogram')
     plt.gcf().set_tight_layout(True)
 
@@ -50,7 +52,8 @@ class algos:
     online_em_hmm = 9
     online_em_hsmm = 10
     incremental_em_hmm = 11
-    incremental_em_hmm_add = 12
+    incremental_em_hsmm = 12
+    incremental_em_hmm_add = 13
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
@@ -196,6 +199,7 @@ if __name__ == '__main__':
             init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(100, 0.05, D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(5, 0.75, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
             t = time.time()
             tau, A, obs_distr, dur_distr, pi, ll_train, _ = \
                     hsmm.em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, n_iter=options.n_iter, fit_durations=False)
@@ -276,6 +280,24 @@ if __name__ == '__main__':
             ass_plots.append(('HMM incremental EM filter', seq))
             ass_plots.append(('HMM incremental EM smoothing', seq_mpm))
             ass_plots.append(('HMM incremental EM viterbi', seq_viterbi))
+
+        elif alg == algos.incremental_em_hsmm:
+            step = lambda t: 1. / (t ** 0.6)
+            # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 20), D=200) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=200) for _ in range(K)]
+            # init_dur_distr = [distributions.PoissonDuration(40, D=200) for _ in range(K)]
+
+            t = time.time()
+            seq, A, obs_distr, dur_distr = hsmm.incremental_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
+            print 'HSMM incremental EM: {}s'.format(time.time() - t)
+
+            seq_mpm = hsmm.mpm_sequence(X, init_pi, A, obs_distr, dur_distr)
+            seq_viterbi, _ = hsmm.viterbi(X, init_pi, A, obs_distr, dur_distr)
+            seqs[alg] = (seq, seq_mpm, seq_viterbi)
+            ass_plots.append(('HSMM incremental EM filter', seq))
+            ass_plots.append(('HSMM incremental EM smoothing', seq_mpm))
+            ass_plots.append(('HSMM incremental EM viterbi', seq_viterbi))
 
         elif alg == algos.incremental_em_hmm_add:
             step = lambda t: 1. / (t ** 0.6)

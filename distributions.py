@@ -65,7 +65,7 @@ class Gaussian(Distribution):
     def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
         return GaussianISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
 
-    def online_max_likelihood(self, rho_obs, phi=None):
+    def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
             s0, s1, s2 = rho_obs.get_statistics()
         else:

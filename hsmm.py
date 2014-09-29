@@ -358,3 +358,88 @@ def online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=N
                 dur_distr[k].online_max_likelihood(rho_dur[k], phi)
 
     return seq, A, obs_distr, dur_distr
+
+def incremental_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=None, fit_durations=False):
+    pi = init_pi.copy()
+    obs_distr = copy.deepcopy(init_obs_distr)
+    if fit_durations:
+        dur_distr = copy.deepcopy(init_dur_distr)
+    else:
+        dur_distr = init_dur_distr
+    D = dur_distr[0].D
+
+    if step is None:
+        step = lambda t: 1. / t
+
+    T = X.shape[0]
+    K = len(obs_distr)
+
+    A = 1. / K * np.ones((K,K))
+    seq = np.zeros(T, dtype=int)
+    phi = np.zeros((K, D))
+    tau = np.zeros(K)  # tau[i] = sum_d phi(i,d)
+
+    emissions = np.array([d.pdf(X[0]) for d in obs_distr]).flatten()
+    phi[:,0] = pi * emissions
+    phi[:,0] /= phi[:,0].sum()
+    tau = phi[:,0]
+    seq[0] = np.argmax(tau)
+
+    # q[i,d,j] = q_t(j,1|i,d) if j > 0
+    # q[i,d,0] = q_t(i,d+1|i,d)
+    q = np.zeros((K,D,K+1))
+
+    s_pairs = distributions.TransitionISufficientStatisticsHMM(K)
+    s_obs = [d.new_incremental_sufficient_statistics_hmm(X[0], tau, i)
+                 for i, d in enumerate(obs_distr)]
+    if fit_durations:
+        pass # TODO
+        # s_dur = [d.new_incremental_sufficient_statistics_hsmm(i, K, D)
+        #                 for i, d in enumerate(dur_distr)]
+
+    for t in range(1,T):
+        ## E-step
+        # d_frac[i,d] = lambda_i(d) = D_i(d+1)/D_i(d)
+        d_frac = np.vstack(d.d_frac() for d in dur_distr)
+        emissions = np.array([d.pdf(X[t]) for d in obs_distr]).flatten()
+
+        # new q_t[i,j,d] transition
+        q[:,:,1:] = (1 - d_frac)[:,:,nax] * A[:,nax,:] * emissions[nax,nax,:]
+        q[:,:,0] = d_frac * emissions[:,nax]
+        q /= q.sum(2)[:,:,nax]
+
+        # phi_q[i,j] = sum_d phi_{t-1}(i,d) q_t(j,1|i,d) (for transitions)
+        phi_q = np.sum(phi[:,:,nax] * q[:,:,1:], axis=1)
+
+        # update phi
+        # phi_t(j,1)
+        phi_1 = np.tensordot(phi, q[:,:,1:], axes=2)
+        phi[:,1:] = phi[:,:-1] * q[:,:-1,0]
+        phi[:,0] = phi_1
+        tau = phi.sum(1)
+
+        # online sequence estimate (could improve using a filter)
+        seq[t] = np.argmax(tau)
+
+        # sufficient statistics updates
+        s = step(t)
+        s_pairs.online_update(phi_q, s)
+        for k in range(K):
+            s_obs[k].online_update(X[t], tau, s)
+            if fit_durations:
+                pass # TODO
+                # s_dur[k].online_update(r, r_marginal, s)
+
+        ## M-step
+        if t < t_min:
+            continue
+        A = s_pairs.get_statistics()
+        A /= A.sum(axis=1)[:,nax]
+
+        for k in range(K):
+            obs_distr[k].online_max_likelihood(s_obs[k], t=t)
+            if fit_durations:
+                pass # TODO
+                # dur_distr[k].online_max_likelihood(s_dur[k], t=t)
+
+    return seq, A, obs_distr, dur_distr

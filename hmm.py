@@ -282,11 +282,11 @@ def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=N
     K = len(obs_distr)
 
     A = 1. / K * np.ones((K,K))
-    seq = np.zeros(T, dtype=int)
-    tau = np.zeros((T, K))
+    seq = np.zeros(T, dtype=int)  # online filtering sequence
+    tau = np.zeros((T, K))        # filter
 
     emissions = np.array([d.pdf(X[0]) for d in obs_distr]).flatten()
-    phi = pi * emissions
+    phi = pi * emissions  # current marginal in q-distribution
     phi /= phi.sum()
     tau[0] = phi
     seq[0] = np.argmax(phi)
@@ -306,9 +306,9 @@ def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=N
     for t in range(1,T):
         # E-step
         emissions = np.array([d.pdf(X[t]) for d in obs_distr]).flatten()
-        q = A * emissions
+        q = A * emissions  # new q_t transition
         q /= q.sum(axis=1)[:,nax]
-        phi_q = phi[:,nax] * q
+        phi_q = phi[:,nax] * q  # for transition statistics
         phi = phi_q.sum(axis=0)
 
         # compute filter
