@@ -202,7 +202,7 @@ def online_opt_hmm(X, lambda1, lambda2, init_obs_distr=None, dist_cls=distributi
 
     return seq, obs_distr, cost
 
-def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, monitor=None):
+def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, m_step_delta=1, Xtest=None, monitor=None):
     pi = init_pi.copy()
     obs_distr = copy.deepcopy(init_obs_distr)
 
@@ -254,7 +254,7 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, 
             rho_obs[k].online_update(X[t], r, s)
 
         # M-step
-        if t < t_min:
+        if t < t_min or t % m_step_delta != 0:
             continue
         # Tracer()()
         A = rho_pairs.dot(phi)
@@ -271,7 +271,7 @@ def online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, 
 
     return seq, tau, A, obs_distr, ll_test, monitor_vals
 
-def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=None, monitor=None):
+def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, m_step_delta=1, Xtest=None, monitor=None):
     pi = init_pi.copy()
     obs_distr = copy.deepcopy(init_obs_distr)
 
@@ -291,8 +291,8 @@ def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=N
     tau[0] = phi
     seq[0] = np.argmax(phi)
 
-    s_pairs = distributions.TransitionISufficientStatisticsHMM(K)
-    s_obs = [d.new_incremental_sufficient_statistics_hmm(X[0], phi, i) for i, d in enumerate(obs_distr)]
+    s_pairs = distributions.TransitionISufficientStatistics(K)
+    s_obs = [d.new_incremental_sufficient_statistics(X[0], phi, i) for i, d in enumerate(obs_distr)]
 
     ll_test = []
     if Xtest is not None:
@@ -324,7 +324,7 @@ def incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=None, Xtest=N
             s_obs[k].online_update(X[t], phi, s)
 
         # M-step
-        if t < t_min:
+        if t < t_min or t % m_step_delta != 0:
             continue
         # Tracer()()
         A = s_pairs.get_statistics()
@@ -369,8 +369,8 @@ def incremental_em_hmm_add(X, lmbda, alpha=1.5, Kmax=30, init_pi=None, init_obs_
     tau = phi
     seq[0] = np.argmax(phi)
 
-    s_pairs = distributions.TransitionISufficientStatisticsHMM(Kmax)
-    s_obs = [d.new_incremental_sufficient_statistics_hmm(X[0], phi, i) for i, d in enumerate(obs_distr)]
+    s_pairs = distributions.TransitionISufficientStatistics(Kmax)
+    s_obs = [d.new_incremental_sufficient_statistics(X[0], phi, i) for i, d in enumerate(obs_distr)]
     t_init = [0 for _ in range(len(obs_distr))]
 
     ll_test = []
@@ -434,7 +434,7 @@ def incremental_em_hmm_add(X, lmbda, alpha=1.5, Kmax=30, init_pi=None, init_obs_
             s_obs[k].online_update(X[t], phi, step(t - t_init[k]+1))
 
         if added_state:
-            s_obs.append(new_distr.new_incremental_sufficient_statistics_hmm(X[t], phi, K-1))
+            s_obs.append(new_distr.new_incremental_sufficient_statistics(X[t], phi, K-1))
 
         # M-step
         # if t < t_min:

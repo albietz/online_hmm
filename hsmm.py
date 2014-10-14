@@ -389,12 +389,12 @@ def incremental_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, s
     # q[i,d,0] = q_t(i,d+1|i,d)
     q = np.zeros((K,D,K+1))
 
-    s_pairs = distributions.TransitionISufficientStatisticsHMM(K)
-    s_obs = [d.new_incremental_sufficient_statistics_hmm(X[0], tau, i)
+    s_pairs = distributions.TransitionISufficientStatistics(K)
+    s_obs = [d.new_incremental_sufficient_statistics(X[0], tau, i)
                  for i, d in enumerate(obs_distr)]
     if fit_durations:
         pass # TODO
-        # s_dur = [d.new_incremental_sufficient_statistics_hsmm(i, K, D)
+        # s_dur = [d.new_incremental_sufficient_statistics(i, K, D)
         #                 for i, d in enumerate(dur_distr)]
 
     for t in range(1,T):

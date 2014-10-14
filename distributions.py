@@ -62,8 +62,8 @@ class Gaussian(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return GaussianSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
-        return GaussianISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
+    def new_incremental_sufficient_statistics(self, x, phi, cluster_id):
+        return GaussianISufficientStatistics(x, phi, cluster_id, self.dim)
 
     def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
@@ -159,8 +159,8 @@ class SquareDistance(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return KLSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
-        return KLISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
+    def new_incremental_sufficient_statistics(self, x, phi, cluster_id):
+        return KLISufficientStatistics(x, phi, cluster_id, self.dim)
 
     def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
@@ -232,8 +232,8 @@ class KL(Distribution):
     def new_sufficient_statistics_hsmm(self, x, cluster_id, K, D):
         return KLSufficientStatisticsHSMM(x, cluster_id, K, D, self.dim)
 
-    def new_incremental_sufficient_statistics_hmm(self, x, phi, cluster_id):
-        return KLISufficientStatisticsHMM(x, phi, cluster_id, self.dim)
+    def new_incremental_sufficient_statistics(self, x, phi, cluster_id):
+        return KLISufficientStatistics(x, phi, cluster_id, self.dim)
 
     def online_max_likelihood(self, rho_obs, phi=None, t=None):
         if phi is None:
@@ -529,19 +529,18 @@ class NegativeBinomialSufficientStatisticsHSMM(PoissonSufficientStatisticsHSMM):
 
 # Sufficient statistics for incremental EM
 class IncrementalSufficientStatistics(object):
+    def __init__(self, cluster_id):
+        self.cluster_id = cluster_id
+
     def online_update(self, x, phi, step):
         raise NotImplementedError
 
     def get_statistics(self):
         raise NotImplementedError
 
-class ISufficientStatisticsHMM(IncrementalSufficientStatistics):
-    def __init__(self, cluster_id):
-        self.cluster_id = cluster_id
-
-class GaussianISufficientStatisticsHMM(ISufficientStatisticsHMM):
+class GaussianISufficientStatistics(IncrementalSufficientStatistics):
     def __init__(self, x, phi, cluster_id, size):
-        super(GaussianISufficientStatisticsHMM, self).__init__(cluster_id)
+        super(GaussianISufficientStatistics, self).__init__(cluster_id)
         # 1{Z_t = i}
         self.s0 = phi[self.cluster_id]
         # 1{Z_t = i} x_t
@@ -557,9 +556,9 @@ class GaussianISufficientStatisticsHMM(ISufficientStatisticsHMM):
     def get_statistics(self):
         return self.s0, self.s1, self.s2
 
-class KLISufficientStatisticsHMM(ISufficientStatisticsHMM):
+class KLISufficientStatistics(IncrementalSufficientStatistics):
     def __init__(self, x, phi, cluster_id, size):
-        super(KLISufficientStatisticsHMM, self).__init__(cluster_id)
+        super(KLISufficientStatistics, self).__init__(cluster_id)
         # 1{Z_t = i}
         self.s0 = phi[self.cluster_id]
         # 1{Z_t = i} x_t
@@ -572,7 +571,7 @@ class KLISufficientStatisticsHMM(ISufficientStatisticsHMM):
     def get_statistics(self):
         return self.s0, self.s1
 
-class TransitionISufficientStatisticsHMM(IncrementalSufficientStatistics):
+class TransitionISufficientStatistics(IncrementalSufficientStatistics):
     def __init__(self, K):
         self.K = K
         # 1{Z_{t-1} = i, Z_t = j}
