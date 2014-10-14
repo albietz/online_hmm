@@ -273,6 +273,7 @@ class ItakuraSaito(Distribution):
 class DurationDistribution(Distribution):
     def __init__(self, D):
         self.D = D
+        self.d_frac_vec = None
 
     def log_pmf(self, X):
         raise NotImplementedError
@@ -287,9 +288,12 @@ class DurationDistribution(Distribution):
         return self.pmf(np.arange(1,self.D+1))
 
     def d_frac(self):
+        if self.d_frac_vec is not None:
+            return self.d_frac_vec
         v = self.log_vec()
         D = np.hstack((np.cumsum(v[::-1])[::-1], 0.))
-        return np.clip(D[1:] / D[:-1], 0, 1 - 1e-16)
+        self.d_frac_vec = np.clip(D[1:] / D[:-1], 0, 1 - 1e-16)
+        return self.d_frac_vec
 
 class PoissonDuration(DurationDistribution):
     def __init__(self, lmbda, D):
