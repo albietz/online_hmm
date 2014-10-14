@@ -36,8 +36,11 @@ def plot_segmentation(X, assignments, start=0, end=None, freq_start=0, freq_end=
     plt.subplot(gs[-2:,:])
     if freq_end is None:
         freq_end = X.shape[1]
-    plt.imshow(np.log(X[start:end, freq_start:freq_end].T), aspect='auto')
+    plt.imshow(np.log(X[start:end, freq_start:freq_end].T),
+        extent=(start, end, freq_end*44100./4096, freq_start*44100./4096),
+        aspect='auto')
     plt.title('Spectrogram')
+    plt.grid(False)
     plt.gcf().set_tight_layout(True)
 
 class algos:
@@ -112,23 +115,34 @@ if __name__ == '__main__':
     K = options.k
 
     ass_plots = []
-    seqs = {}  # sequences obtained, indexed by algorithm
+    seqs = {}
+    results = {}  # data/results obtained, indexed by algorithm
 
     # K-means
     if options.init == 'kmeans' or algos.kmeans in algs:
         t = time.time()
         assignments, centroids, dists = \
                 kmeans.kmeans_best_of_n(X, K, n_trials=4, dist_cls=distributions.KL)
-        seqs[algos.kmeans] = assignments
         print 'K-means: {}s'.format(time.time() - t)
+        results[algos.kmeans] = {
+            'seq': assignments,
+            'centroids': centroids,
+        }
+        seqs[algos.kmeans] = assignments
 
     # EM
     if options.init == 'em' or algos.em in algs:
         iterations = 10
         t = time.time()
         tau_em, obs_distr, pi, em_ll_train, _ = em.em(X, centroids, n_iter=options.n_iter)
-        seqs[algos.em] = np.argmax(tau_em, axis=1)
         print 'EM: {}s'.format(time.time() - t)
+        results[algos.em] = {
+            'seq': np.argmax(tau_em, axis=1),
+            'obs_distr': obs_distr,
+            'll_train': em_ll_train,
+            'tau': tau_em,
+        }
+        seqs[algos.em] = np.argmax(tau_em, axis=1)
 
 
     # initialization
@@ -166,13 +180,14 @@ if __name__ == '__main__':
         print '{} initialization is not available'.format(options.init)
         sys.exit(0)
 
+
     # run algorithms
     for alg in algs:
         if alg == algos.kmeans:
-            ass_plots.append(('K-means', seqs[alg]))
+            ass_plots.append(('K-means', results[alg]['seq']))
 
         elif alg == algos.em:
-            ass_plots.append(('EM', seqs[alg]))
+            ass_plots.append(('EM', results[alg]['seq']))
 
         elif alg == algos.hmm:
             t = time.time()
@@ -184,19 +199,33 @@ if __name__ == '__main__':
 
             seq_viterbi, _ = hmm.viterbi(X, pi, A, obs_distr)
             ass_plots.append(('HMM viterbi', seq_viterbi))
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'pi': pi,
+                'll_train': ll_train,
+                'seq_smoothing': seq_smoothing,
+                'seq_viterbi': seq_viterbi,
+            }
             seqs[alg] = (seq_smoothing, seq_viterbi)
 
         elif alg == algos.map_hmm:
             t = time.time()
             seq, obs_distr, energies = hmm.map_em_hmm(X, init_obs_distr)
             print 'HMM MAP-EM: {}s, final energy: {}'.format(time.time() - t, energies[-1])
-            seqs[alg] = np.array(seq)
-            ass_plots.append(('HMM MAP-EM', seqs[alg]))
+            results[alg] = {
+                'obs_distr': obs_distr,
+                'energies': energies,
+                'seq': seq,
+            }
+            ass_plots.append(('HMM MAP-EM', seq))
+            seqs[alg] = seq
 
         elif alg == algos.hsmm:
             # init_dur_distr = [distributions.PoissonDuration(60, D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(100, 0.2, D=400) for _ in range(K)]
-            init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=200) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=100) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(100, 0.05, D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(5, 0.75, D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
@@ -210,6 +239,16 @@ if __name__ == '__main__':
 
             seq_viterbi, _ = hsmm.viterbi(X, pi, A, obs_distr, dur_distr)
             ass_plots.append(('HSMM viterbi', seq_viterbi))
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'dur_distr': dur_distr,
+                'pi': pi,
+                'll_train': ll_train,
+                'seq_smoothing': seq_smoothing,
+                'seq_viterbi': seq_viterbi,
+            }
             seqs[alg] = (seq_smoothing, seq_viterbi)
 
         elif alg == algos.map_hsmm:
@@ -239,8 +278,9 @@ if __name__ == '__main__':
         elif alg == algos.online_em_hmm:
             step = lambda t: 1. / (t ** 0.6)
             t = time.time()
-            seq, tau, A, obs_distr, _, _ = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step)
-            print 'HMM online EM: {}s'.format(time.time() - t)
+            seq, tau, A, obs_distr, _, _ = hmm.online_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step, m_step_delta=10)
+            ll_final = hmm.log_likelihood(*hmm.alpha_beta(X, init_pi, A, obs_distr))
+            print 'HMM online EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_final)
 
             seq_mpm = hmm.mpm_sequence(X, init_pi, A, obs_distr)
             seq_viterbi, _ = hmm.viterbi(X, init_pi, A, obs_distr)
@@ -249,11 +289,22 @@ if __name__ == '__main__':
             ass_plots.append(('HMM online EM filter', seq))
             ass_plots.append(('HMM online EM smoothing', seq_mpm))
             ass_plots.append(('HMM online EM viterbi', seq_viterbi))
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'pi': init_pi,
+                'll_final': ll_final,
+                'seq_online': seq,
+                'seq_smoothing': seq_mpm,
+                'seq_viterbi': seq_viterbi,
+            }
 
         elif alg == algos.online_em_hsmm:
             step = lambda t: 1. / (t ** 0.6)
             # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
-            init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 20), D=60) for _ in range(K)]
+            # init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 20), D=60) for _ in range(K)]
+            init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=100) for _ in range(K)]
             # init_dur_distr = [distributions.PoissonDuration(40, D=200) for _ in range(K)]
             t = time.time()
             seq, A, obs_distr, dur_distr = hsmm.online_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
@@ -266,12 +317,27 @@ if __name__ == '__main__':
             ass_plots.append(('HSMM online EM smoothing', seq_mpm))
             ass_plots.append(('HSMM online EM viterbi', seq_viterbi))
 
+            _, _, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
+            ll_final = hsmm.log_likelihood(init_pi, lbetastar)
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'dur_distr': dur_distr,
+                'pi': init_pi,
+                'll_final': ll_final,
+                'seq_online': seq,
+                'seq_smoothing': seq_mpm,
+                'seq_viterbi': seq_viterbi,
+            }
+
         elif alg == algos.incremental_em_hmm:
             step = lambda t: 1. / (t ** 0.6)
             # step = lambda t: 1. / t
             t = time.time()
-            seq, tau, A, obs_distr, _, _ = hmm.incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step)
-            print 'HMM incremental EM: {}s'.format(time.time() - t)
+            seq, tau, A, obs_distr, _, _ = hmm.incremental_em_hmm(X, init_pi, init_obs_distr, t_min=100, step=step, m_step_delta=10)
+            ll_final = hmm.log_likelihood(*hmm.alpha_beta(X, init_pi, A, obs_distr))
+            print 'HMM incremental EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_final)
 
             seq_mpm = hmm.mpm_sequence(X, init_pi, A, obs_distr)
             seq_viterbi, _ = hmm.viterbi(X, init_pi, A, obs_distr)
@@ -281,8 +347,20 @@ if __name__ == '__main__':
             ass_plots.append(('HMM incremental EM smoothing', seq_mpm))
             ass_plots.append(('HMM incremental EM viterbi', seq_viterbi))
 
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'pi': init_pi,
+                'll_final': ll_final,
+                'seq_online': seq,
+                'seq_smoothing': seq_mpm,
+                'seq_viterbi': seq_viterbi,
+            }
+
         elif alg == algos.incremental_em_hsmm:
             step = lambda t: 1. / (t ** 0.6)
+            # step = lambda t: 1. / t
             # init_dur_distr = [distributions.NegativeBinomial(5, 0.95, D=200) for _ in range(K)]
             # init_dur_distr = [distributions.NegativeBinomial(30, 30. / (30 + 20), D=200) for _ in range(K)]
             init_dur_distr = [distributions.NegativeBinomial(5, 5. / (5 + 20), D=200) for _ in range(K)]
@@ -290,7 +368,9 @@ if __name__ == '__main__':
 
             t = time.time()
             seq, A, obs_distr, dur_distr = hsmm.incremental_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
-            print 'HSMM incremental EM: {}s'.format(time.time() - t)
+            _, _, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
+            ll_final = hsmm.log_likelihood(init_pi, lbetastar)
+            print 'HSMM incremental EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_final)
 
             seq_mpm = hsmm.mpm_sequence(X, init_pi, A, obs_distr, dur_distr)
             seq_viterbi, _ = hsmm.viterbi(X, init_pi, A, obs_distr, dur_distr)
@@ -298,6 +378,18 @@ if __name__ == '__main__':
             ass_plots.append(('HSMM incremental EM filter', seq))
             ass_plots.append(('HSMM incremental EM smoothing', seq_mpm))
             ass_plots.append(('HSMM incremental EM viterbi', seq_viterbi))
+
+            results[alg] = {
+                'tau': tau,
+                'A': A,
+                'obs_distr': obs_distr,
+                'dur_distr': dur_distr,
+                'pi': init_pi,
+                'll_final': ll_final,
+                'seq_online': seq,
+                'seq_smoothing': seq_mpm,
+                'seq_viterbi': seq_viterbi,
+            }
 
         elif alg == algos.incremental_em_hmm_add:
             step = lambda t: 1. / (t ** 0.6)
