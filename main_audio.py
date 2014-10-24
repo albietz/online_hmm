@@ -61,16 +61,23 @@ class algos:
 if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('-f', '--file', dest='filename',
-            help='STFT input file (default: ravel-fft.mat)', default='ravel-fft.mat')
+            help='STFT matlab input file (default: ravel-fft.mat)', default='ravel-fft.mat')
     parser.add_option('-a', '--algos', dest='algos',
-            help='''list of algorithms to run (default:all):\n
+            help='''list of algorithms to run (default:3,4):\n
 1: K-means\n
 2: EM\n
 3: HMM\n
 4: HSMM\n
-5: MAP-HMM\n
-6: MAP-HSMM''',
-                      default='1,2,3,4,5,6')
+5: MAP-HMM (non-probabilistic)\n
+6: MAP-HSMM (non-probabilistic)\n
+7: online non-probabilistic HMM\n
+8: online non-probabilistic HSMM\n
+9: online EM HMM (Cappe)\n
+10: online EM HSMM\n
+11: incremental EM HMM\n
+12: incremental EM HSMM\n
+13: incremental EM HMM with new states''',
+                      default='3,4')
     parser.add_option('--init', dest='init',
                       help='initialization (kmeans(default)/em/randex)', default='kmeans')
     parser.add_option('--kmeans_trials', dest='kmeans_trials', type='int',
@@ -81,10 +88,12 @@ if __name__ == '__main__':
                       help='repeat input')
     parser.add_option('--iter', dest='n_iter', default=10, type='int',
                       help='EM iterations')
-    parser.add_option('-n', dest='n', default=5, type='float')
+    parser.add_option('-n', dest='n', default=5, type='float',
+                      help='spectrum normalization constant')
     parser.add_option('--start', dest='start', default=0, type='int')
     parser.add_option('--end', dest='end', default=None, type='int')
-    parser.add_option('--ground_truth', dest='ground_truth', default=None)
+    parser.add_option('--ground_truth', dest='ground_truth', default=None,
+                      help='ground truth file')
     options, args = parser.parse_args()
 
     matfile = loadmat(options.filename)

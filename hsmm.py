@@ -238,6 +238,7 @@ def map_em_hsmm(X, init_obs_distr, dur_distr, A=None, n_iter=10):
     return seq, obs_distr, dur_distr, energies
 
 def online_opt_hsmm(X, lambda1, lambda2, lcost, init_obs_distr=None, dist_cls=distributions.SquareDistance):
+    """TODO: Rewrite with the right costs and test it."""
     if init_obs_distr is None:
         obs_distr = [dist_cls(X[0])]
     else:
