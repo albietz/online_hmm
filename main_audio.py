@@ -326,8 +326,8 @@ if __name__ == '__main__':
             ass_plots.append(('HSMM online EM smoothing', seq_mpm))
             ass_plots.append(('HSMM online EM viterbi', seq_viterbi))
 
-            _, _, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
-            ll_final = hsmm.log_likelihood(init_pi, lbetastar)
+            _, lalphastar, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
+            ll_final = hsmm.log_likelihood(lalphastar, lbetastar)
             results[alg] = {
                 'tau': tau,
                 'A': A,
@@ -377,8 +377,8 @@ if __name__ == '__main__':
 
             t = time.time()
             seq, A, obs_distr, dur_distr = hsmm.incremental_em_hsmm(X, init_pi, init_obs_distr, init_dur_distr, t_min=100, step=step)
-            _, _, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
-            ll_final = hsmm.log_likelihood(init_pi, lbetastar)
+            _, lalphastar, _, lbetastar = hsmm.alpha_beta(X, init_pi, A, obs_distr, dur_distr)
+            ll_final = hsmm.log_likelihood(lalphastar, lbetastar)
             print 'HSMM incremental EM: {}s, final loglikelihood: {}'.format(time.time() - t, ll_final)
 
             seq_mpm = hsmm.mpm_sequence(X, init_pi, A, obs_distr, dur_distr)

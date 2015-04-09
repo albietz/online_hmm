@@ -114,11 +114,12 @@ def viterbi(X, pi, A, obs_distr, dur_distr, use_distance=False):
 def smoothing(lalpha, lalphastar, lbeta, lbetastar):
     '''Computes all the p(q_t | u_1, ..., u_T)'''
     T, K = lalpha.shape
+    logZ = log_likelihood(lalphastar, lbetastar)
 
     lgamma = lalpha + lbeta
     lgammastar = lalphastar + lbetastar
-    gamma = np.exp(lgamma - np.logaddexp.reduce(lgamma, axis=1)[:,nax])
-    gammastar = np.exp(lgammastar - np.logaddexp.reduce(lgammastar, axis=1)[:,nax])
+    gamma = np.exp(lgamma - logZ)
+    gammastar = np.exp(lgammastar - logZ)
 
     tau = np.cumsum(gammastar - np.vstack((np.zeros(K), gamma[:-1])), axis=0)
     return tau
@@ -128,18 +129,15 @@ def mpm_sequence(X, pi, A, obs_distr, dur_distr):
     tau = np.exp(smoothing(lalpha, lalphastar, lbeta, lbetastar))
     return np.argmax(tau, axis=1)
 
-def pairwise_smoothing(X, lalpha, lbetastar, A):
+def pairwise_smoothing(X, lalpha, lalphastar, lbetastar, A):
     '''returns log_p[t,i,j] = log p(q_t = i, q_{t+1} = j|u)'''
     T, K = lalpha.shape
     lA = np.log(A)
+    logZ = log_likelihood(lalphastar, lbetastar)
 
     log_p = lalpha[:T-1,:,nax] + lA[nax,:,:] + lbetastar[1:,nax,:]
 
-    log_p2 = log_p.reshape(T-1, K*K)
-    log_p = np.reshape(log_p2 - np.logaddexp.reduce(log_p2, axis=1)[:,nax],
-                       (T-1,K,K))
-
-    return log_p
+    return log_p - logZ
 
 def posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr):
     '''lDpost[d,i] = log \hat{p}(d|i)'''
@@ -160,9 +158,9 @@ def posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr):
     lDpost = np.logaddexp.reduce(lDpost, axis=0)
     return lDpost - np.logaddexp.reduce(lDpost, axis=0)[nax,:]
 
-def log_likelihood(pi, lbetastar):
-    '''p(u_1, ..., u_T) = \sum_i pi(i) beta*_0(i)'''
-    return np.logaddexp.reduce(np.log(pi) + lbetastar[0])
+def log_likelihood(lalphastar, lbetastar):
+    '''p(u_1, ..., u_T) = \sum_i alpha*_0(i) beta*_0(i) = \sum_i pi(i) beta*_0(i)'''
+    return np.logaddexp.reduce(lalphastar[0] + lbetastar[0])
 
 def em_hsmm(X, pi, init_obs_distr, init_dur_distr, n_iter=10, Xtest=None, fit_durations=False):
     pi = pi.copy()
@@ -180,16 +178,16 @@ def em_hsmm(X, pi, init_obs_distr, init_dur_distr, n_iter=10, Xtest=None, fit_du
     ll_test = []
 
     lalpha, lalphastar, lbeta, lbetastar = alpha_beta(X, pi, A, obs_distr, dur_distr)
-    ll_train.append(log_likelihood(pi, lbetastar))
+    ll_train.append(log_likelihood(lalphastar, lbetastar))
     if Xtest is not None:
-        _, _, _, lbetastar_test = \
+        _, lalphastar_test, _, lbetastar_test = \
                 alpha_beta(Xtest, pi, A, obs_distr, dur_distr)
-        ll_test.append(log_likelihood(pi, lbetastar_test))
+        ll_test.append(log_likelihood(lalphastar_test, lbetastar_test))
 
     for it in range(n_iter):
         # E-step
         tau = np.exp(smoothing(lalpha, lalphastar, lbeta, lbetastar))
-        tau_pairs = np.exp(pairwise_smoothing(X, lalpha, lbetastar, A))
+        tau_pairs = np.exp(pairwise_smoothing(X, lalpha, lalphastar, lbetastar, A))
         if fit_durations:
             post_dur = np.exp(posterior_durations(X, lalphastar, lbeta, obs_distr, dur_distr))
 
@@ -206,11 +204,11 @@ def em_hsmm(X, pi, init_obs_distr, init_dur_distr, n_iter=10, Xtest=None, fit_du
 
         lalpha, lalphastar, lbeta, lbetastar = \
                 alpha_beta(X, pi, A, obs_distr, dur_distr)
-        ll_train.append(log_likelihood(pi, lbetastar))
+        ll_train.append(log_likelihood(lalphastar, lbetastar))
         if Xtest is not None:
-            _, _, _, lbetastar_test = \
+            _, lalphastar_test, _, lbetastar_test = \
                     alpha_beta(Xtest, pi, A, obs_distr, dur_distr)
-            ll_test.append(log_likelihood(pi, lbetastar_test))
+            ll_test.append(log_likelihood(lalphastar_test, lbetastar_test))
 
     return tau, A, obs_distr, dur_distr, pi, ll_train, ll_test
 

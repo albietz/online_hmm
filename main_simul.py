@@ -79,4 +79,5 @@ if __name__ == '__main__':
         print 'HSMM - online EM'
         online_hsmm_seq, A_online, obs_distr_online, dur_distr_online = \
                 hsmm.online_em_hsmm(X, init_pi, init_obs_distr, dur_distr, t_min=80, step=step, fit_durations=False)
-        online_hsmm_ll = hsmm.log_likelihood(pi_batch, hsmm.alpha_beta(X, pi_batch, A_online, obs_distr_online, dur_distr_online)[3])
+        _, lalphastar, _, lbetastar = hsmm.alpha_beta(X, pi_batch, A_online, obs_distr_online, dur_distr_online)
+        online_hsmm_ll = hsmm.log_likelihood(lalphastar, lbetastar)
